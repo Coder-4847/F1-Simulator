@@ -1,0 +1,7 @@
+{
+  "name": "apex-formula-simulator",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": { "start": "node server.mjs", "dev": "node server.mjs", "test": "node tests/simulation.test.mjs" }
+}
