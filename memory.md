@@ -53,7 +53,7 @@ Before pushing changes, run `npm test`, then manually run the browser checks and
 - `tests/browser.html` and `tests/browser.js` — 26 isolated end-to-end browser checks and visual scene controls.
 - `scripts/export-model.mjs` — regenerates the default OBJ/MTL assets.
 - `server.mjs` — dependency-free local static server.
-- `.github/workflows/deploy-pages.yml` — tests and deploys the static project on every push to `main`.
+- `.github/workflows/ci.yml` — runs the simulation tests on pushes and pull requests.
 
 ## Persistence schema
 
@@ -84,6 +84,6 @@ At this handoff:
 
 ## Deployment
 
-GitHub Pages deploys from the `main` branch through the included workflow. The workflow runs `npm test` before uploading the static repository. If deployment is not active, open repository **Settings → Pages** and set **Source** to **GitHub Actions**, then re-run the `Deploy GitHub Pages` workflow.
+GitHub Pages deploys the static project from the `main` branch and repository root. The separate `Simulator Tests` workflow runs `npm test` on pushes and pull requests.
 
 When resuming work, read this file and `README.md`, run both test suites, and preserve the `apex-formula-v1` schema unless a migration is added.
