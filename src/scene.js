@@ -18,7 +18,7 @@ class Mesh {
 }
 // Colors use the same steering authority as the player, with a small turn-in margin.
 export function buildRacingLine(race){
-  const mesh=new Mesh(),p=race.cars[0],track=race.track;
+  const mesh=new Mesh(),p=race.cars[race.viewPlayer||0],track=race.track;
   for(let d=Math.floor(p.distance/5)*5;d<p.distance+240;d+=5){
     const target=guideSpeed(race,d);
     const color=p.speed>target+2?'#ff3333':p.speed>target-3?'#ffd52a':'#52f547';
@@ -141,7 +141,7 @@ export function renderScene(canvas,race,dt,carMesh){
   const rainy=race.weather.includes('rain'),dark=race.weather==='Heavy rain',over=race.weather==='Overcast';
   const sky=dark?[.37,.46,.5]:rainy||over?[.62,.72,.75]:[.46,.72,.89];
   gl.clearColor(...sky,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
-  const p=race.cars[0],pos=p.world||atTrack(race.track,p.distance,p.offset),heading=p.heading??atTrack(race.track,p.distance).yaw;
+  const p=race.cars[race.viewPlayer||0],pos=p.world||atTrack(race.track,p.distance,p.offset),heading=p.heading??atTrack(race.track,p.distance).yaw;
   if(!v.camera||v.race!==race){v.camera={yaw:heading};v.race=race;}
   v.camera.yaw+=angleDiff(heading,v.camera.yaw)*(1-Math.exp(-dt*7));
   const yaw=v.camera.yaw;

@@ -49,8 +49,8 @@ Before pushing changes, run `npm test`, then manually run the browser checks and
 - `src/render.js` — procedural car mesh, garage renderer, minimaps, and race-renderer entry point.
 - `src/scene.js` — native WebGL renderer and procedural circuit environment.
 - `src/app.js` — navigation, screens, input, state persistence, track editor, garage, race loop, seasons, import/export, and HUD.
-- `tests/simulation.test.mjs` — 34 engine/regression tests.
-- `tests/browser.html` and `tests/browser.js` — 35 isolated end-to-end browser checks and visual scene controls.
+- `tests/simulation.test.mjs` — 39 engine/regression tests.
+- `tests/browser.html` and `tests/browser.js` — 52 isolated end-to-end browser checks and visual scene controls.
 - `scripts/export-model.mjs` — regenerates the default OBJ/MTL assets.
 - `server.mjs` — dependency-free local static server.
 - `.github/workflows/ci.yml` — runs the simulation tests on pushes and pull requests.
@@ -68,8 +68,8 @@ Before pushing changes, run `npm test`, then manually run the browser checks and
 
 At this handoff:
 
-- All **34** Node simulation tests pass.
-- All **35** browser integration checks pass.
+- All **39** Node simulation tests pass.
+- All **52** browser integration checks pass.
 - The AI completes all three preset circuits in clear and heavy-rain conditions.
 - Barrier stress tests try 30-meter movements through both walls around every preset circuit.
 - Browser checks cover keyboard driving/braking, Track Studio persistence, all ten car setups, OBJ/MTL export, seasons, multi-stop strategy, weather, fuel, backup/import, ghosts, WebGL rendering, and reload persistence.
@@ -106,3 +106,15 @@ When resuming work, read this file and `README.md`, run both test suites, and pr
 - src/handling.js shares steering limits and grip between player physics and racing guidance, and provides the component damage diagram. Front wing/rear wing/suspension/engine/chassis have distinct HUD colors and damage percentages. Collision direction selects the affected component; impact speed sets severity.
 - src/racing-line.js caches a bounded smoothed circuit path and computes braking guidance from actual steering authority instead of the old arbitrary corner-speed formula.
 - Verification: 34 simulation checks; 35 browser checks including reverse, damage HUD and AI settings. Dry and wet scenes inspected.
+
+## Local split screen (2026-09-15)
+
+- Grand Prix setup has a Players / screen layout selector: solo, side by side, top/bottom. Stored as race.splitScreen (solo/side/stacked). Existing saves default to solo. Championship launches explicitly force solo; practice/time trial remain solo.
+- Two humans are car IDs 0 and 1, with eight AI opponents. P1 uses WASD/Space/B/R; P2 uses arrows/Enter/P/Backspace. Escape pauses both. Solo input aliases remain unchanged.
+- Race physics is still stepped once. playerState(r,id) returns the timing/steering/pit state for each human (r for P1; r.player2 for P2). In split mode recovery increments the individual's penalty instead of advancing the shared clock. The race ends only when both human cars finish or retire.
+- src/split-screen.js owns split markup, per-player HUDs, two stable renderer views, pause strategy controls, and results. Each canvas follows its viewPlayer; both cameras render the shared cars. Per-player racing-line colors use that driver's condition and speed.
+- Split pause has independent tire/fuel controls, AI difficulty, orientation, resume/end; pit requests are keyboard-only. Orientation may be changed without restarting.
+- Split best laps stay in the session; solo persisted records/ghosts are not replaced. P2 uses the second garage car's setup/livery.
+- 39 simulation checks pass, including an entire two-human lap, independent input/service/reset, shared pause and independent finish/retirement.
+
+- Split-screen validation: 52 browser checks pass, including both orientations, independent keyboard input/pit requests/reset penalties, separate service settings, replay, and restoration of the solo pause menu. Both orientations visually inspected.

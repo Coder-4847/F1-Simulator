@@ -56,9 +56,9 @@ The race renderer uses native WebGL with a depth buffer, procedural asphalt/gras
 
 ## Verification
 
-`npm test` runs 34 regression checks, including a complete two-lap race, AI finishes on all three presets in clear/heavy-rain conditions, high-speed collisions around both walls, gravel effects, tire/fuel/pit behavior, retirement, and ghost/recovery handling.
+`npm test` runs 39 regression checks, including a complete two-lap race, AI finishes on all three presets in clear/heavy-rain conditions, high-speed collisions around both walls, gravel effects, tire/fuel/pit behavior, retirement, and ghost/recovery handling.
 
-Open `http://localhost:5173/tests/browser.html` and choose **Run UI checks** for 35 repeatable browser integration checks, including keyboard driving, custom tracks, all ten car setups, model export, season strategies, ghosts, and backup/import. They use the isolated `apex-formula-test` save, preserving your normal paddock. The same page provides visual scene checks by circuit, sector, weather, and ghost visibility. Custom self-intersecting circuits remain unsupported; keep the racing corridor clear of itself.
+Open `http://localhost:5173/tests/browser.html` and choose **Run UI checks** for 52 repeatable browser integration checks, including keyboard driving, custom tracks, all ten car setups, model export, season strategies, ghosts, and backup/import. They use the isolated `apex-formula-test` save, preserving your normal paddock. The same page provides visual scene checks by circuit, sector, weather, and ghost visibility. Custom self-intersecting circuits remain unsupported; keep the racing corridor clear of itself.
 
 ## Driving assists and AI
 
@@ -69,3 +69,19 @@ A dynamic racing line appears in every driving mode: green to accelerate, yellow
 ### Component damage
 
 The HUD car diagram colors the front wing, rear wing, chassis, engine and suspension separately: green (intact), yellow (under 25%), dark yellow (25–49%), orange (50–74%), red (75%+). Percentages indicate damage, not remaining health. Front impacts damage the front wing; rear impacts damage the rear wing and engine; side impacts damage suspension. Impact speed controls severity. Wing damage reduces turning grip, suspension damage reduces steering response, and engine/chassis damage reduces top speed. Repairs and recovery update the diagram immediately.
+
+## Local split screen
+
+In **Grand Prix → Players / screen layout**, select **Two players · side by side** or **Two players · top and bottom**. Two humans share the track with eight AI rivals. Each viewport has its own chase camera, racing line, speed, position, lap timing, damage, tire/fuel display and minimap.
+
+| Action | Player 1 | Player 2 |
+| --- | --- | --- |
+| Accelerate | W | Up arrow |
+| Brake, then reverse | S | Down arrow |
+| Steer | A / D | Left / Right arrows |
+| Brake only | Space | Enter |
+| Request pit stop | B | P |
+| Recover (+5 seconds) | R | Backspace |
+| Pause both players | Escape | Escape |
+
+The split-screen pause menu has individually labeled tire/refuel settings and no pit-request button: request service using the assigned key while driving. Screen orientation can also be changed while paused. Reset penalties apply only to the player resetting; one player finishing or retiring does not end the other's race. Results show both players. Split-screen lap bests are session-only and do not replace saved solo ghosts. Single-player bindings and its pause menu remain available when **One player** is selected. Championships, practice and time trial remain single-player.

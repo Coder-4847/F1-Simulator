@@ -3,7 +3,7 @@ import {racingPath,guideSpeed} from '../src/racing-line.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {defaultState,makeTrack,atTrack,angleDiff,TIRES,tireGrip,scoreSeason,formatTime} from '../src/core.js';
-import {createRace,stepRace,recover,standings,impact} from '../src/race.js';
+import {createRace,stepRace,recover,standings,impact,requestPit,playerKeys} from '../src/race.js';
 import {resetWorld,moveWithinBarriers,footprintClearance,SURFACES,surfaceAt,ghostPose} from '../src/world.js';
 import {buildWorld,buildRacingLine} from '../src/scene.js';
 import {carMesh} from '../src/render.js';
@@ -171,4 +171,48 @@ test('engine damage reduces attainable speed without applying front wing damage'
   damaged.cars[0].engine=90;
   stepRace(healthy,new Set(['w']),.02);stepRace(damaged,new Set(['w']),.02);
   assert.ok(damaged.cars[0].speed<healthy.cars[0].speed*.8);assert.equal(damaged.cars[0].wing,0);
+});
+
+function splitFixture(){const s=defaultState();s.race.splitScreen='side';s.race.damage=false;s.race.pitLap=0;const r=createRace(s,makeTrack(s.tracks[0].points));r.countdown=0;return r;}
+test('split keyboard routes arrows to P2 only and retains all solo aliases',()=>{
+  const r=splitFixture();r.cars.slice(2).forEach(c=>c.finished=true);
+  for(let i=0;i<60;i++)stepRace(r,new Set(['ArrowUp']),.02);
+  assert.equal(r.cars[0].speed,0);assert.ok(r.cars[1].speed>5);
+  const h=r.cars[1].heading;
+  for(let i=0;i<30;i++)stepRace(r,new Set(['w','ArrowUp','ArrowRight']),.02);
+  assert.ok(r.cars[0].speed>0);assert.ok(angleDiff(r.cars[1].heading,h)>.01);assert.equal(r.steer,0);
+  assert.ok(playerKeys(new Set(['Enter']),1,true).has(' '));assert.ok(!playerKeys(new Set(['ArrowUp']),0,true).has('w'));
+  const solo=fixture('test');stepRace(solo,new Set(['ArrowUp']),.02);assert.ok(solo.cars[0].speed>0);
+});
+test('split reset penalty, pit request and pit service belong to their player',()=>{
+  const r=splitFixture(),p1=r.cars[0],p2=r.cars[1];r.cars.slice(2).forEach(c=>c.finished=true);
+  const elapsed=r.elapsed;recover(r,1);assert.equal(r.elapsed,elapsed);assert.equal(r.player2.penalty,5);assert.equal(r.penalty||0,0);assert.equal(p2.pitTime,0);
+  r.player2.pitTire='wet';r.player2.pitFuel=47;p2.distance=r.track.length+10;r.player2.lap=2;resetWorld(r.track,p2);requestPit(r,1);
+  assert.equal(r.pitRequested,false);stepRace(r,new Set(['w']),.02);assert.ok(p2.pitTime>0);assert.equal(p1.pitTime,0);
+  for(let i=0;i<300;i++)stepRace(r,new Set(),.02);
+  assert.equal(p2.tire,'wet');assert.equal(p2.fuel,47);assert.equal(p1.tire,'medium');assert.equal(r.player2.pitRequested,false);
+  recover(r,0);assert.equal(r.penalty,5);assert.equal(r.player2.penalty,5);
+});
+test('split pause freezes both cars and finish waits for both players',()=>{
+  const r=splitFixture();r.config.laps=1;r.cars.slice(2).forEach(c=>c.finished=true);r.paused=true;
+  stepRace(r,new Set(['w','ArrowUp']),.02);assert.equal(r.elapsed,0);assert.equal(r.cars[1].speed,0);r.paused=false;
+  r.cars[0].distance=r.track.length-.1;r.cars[0].speed=30;resetWorld(r.track,r.cars[0]);stepRace(r,new Set(),.02);
+  assert.equal(r.cars[0].finished,true);assert.equal(r.finished,false);const time=r.lapTime;
+  stepRace(r,new Set(['ArrowUp']),.02);assert.equal(r.lapTime,time);assert.ok(r.cars[1].speed>0);
+  r.cars[1].distance=r.track.length-.1;r.cars[1].speed=30;resetWorld(r.track,r.cars[1]);stepRace(r,new Set(),.02);
+  assert.equal(r.cars[1].finished,true);assert.equal(r.finished,true);assert.equal(r.lap,2);assert.equal(r.player2.lap,2);
+});
+test('one retired split player does not stop the other player or accept reset',()=>{
+  const r=splitFixture();r.cars[0].damage=100;stepRace(r,new Set(),.02);
+  assert.equal(r.cars[0].retired,true);assert.equal(r.finished,false);recover(r,0);assert.equal(r.cars[0].damage,100);
+  r.cars[1].damage=100;stepRace(r,new Set(),.02);assert.equal(r.finished,true);
+});
+test('both split players complete a lap with independent timing and input',()=>{
+  const r=splitFixture();r.config.laps=1;
+  for(let i=0;i<20000&&!r.finished;i++){
+    const keys=new Set();
+    for(const id of [0,1]){const p=r.cars[id],road=atTrack(r.track,p.distance+10),error=angleDiff(road.yaw-Math.atan(p.offset*.12),p.heading??road.yaw);keys.add(id===0?(p.speed>35?'s':'w'):(p.speed>35?'ArrowDown':'ArrowUp'));if(error>.012)keys.add(id===0?'d':'ArrowRight');if(error<-.012)keys.add(id===0?'a':'ArrowLeft');}
+    stepRace(r,keys,.02);
+  }
+  assert.equal(r.finished,true);assert.ok(r.cars.slice(0,2).every(c=>c.finished));assert.ok(Number.isFinite(r.best)&&Number.isFinite(r.player2.best));assert.equal(new Set(r.finishOrder).size,r.finishOrder.length);
 });

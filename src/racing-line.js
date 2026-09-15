@@ -28,7 +28,7 @@ export function linePoint(track,distance){
   return {x:a.x+(b.x-a.x)*t,z:a.z+(b.z-a.z)*t,yaw:a.yaw+angleDiff(b.yaw,a.yaw)*t,curvature:a.curvature+(b.curvature-a.curvature)*t};
 }
 export function guideSpeed(race,distance){
-  const car=race.cars[0],grip=handlingGrip(car,race.weather),braking=Math.max(3,(14+car.setup.brakes*.13)*grip*.9);
+  const car=race.cars[race.viewPlayer||0],grip=handlingGrip(car,race.weather),braking=Math.max(3,(14+car.setup.brakes*.13)*grip*.9);
   let target=car.setup.topSpeed/3.6;
   for(let look=0;look<=160;look+=10){
     const corner=cornerLimit(car,race.weather,linePoint(race.track,distance+look).curvature)*.96;
