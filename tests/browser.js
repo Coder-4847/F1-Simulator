@@ -45,6 +45,10 @@ document.querySelector('#run').onclick=async()=>{
     press('keydown','r');press('keyup','r');press('keydown','w');await sleep(500);press('keyup','w');
     assert(Number(doc().querySelector('#hud-speed').textContent)>0,'Recovery permits immediate driving');
     assert(doc().querySelector('#race-canvas').dataset.racingLine==='dynamic','Dynamic racing line renders');
+    assert(doc().querySelectorAll('#damage-diagram [data-component]').length===5,'Car damage diagram shows five distinct components');
+    assert([...doc().querySelectorAll('#damage-diagram [data-component]')].every(el=>el.getAttribute('fill')==='#54dc83'),'Undamaged car components are green');
+    press('keydown','s');await sleep(1800);press('keyup','s');assert(doc().querySelector('#hud-gear').textContent==='R','Holding S brakes then selects reverse');
+    press('keydown','w');await sleep(1400);press('keyup','w');assert(doc().querySelector('#hud-gear').textContent!=='R'&&Number(doc().querySelector('#hud-speed').textContent)>0,'W stops reversing and drives forward');
     click('[data-action="pause"]');assert(doc().querySelector('#live-pit-tire'),'Pause exposes live tire and fuel strategy');
     set('#live-pit-tire','wet');set('#live-pit-fuel',47);click('[data-action="end-session"]');click('[data-nav="dashboard"]');
     click('[data-nav="garage"]');

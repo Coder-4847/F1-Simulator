@@ -28,13 +28,14 @@ Open **http://localhost:5173**. Run the simulation checks with `npm test`.
 | Control | Action |
 | --- | --- |
 | W / Up | Throttle |
-| S / Down / Space | Brake |
+| S / Down | Brake, then reverse when stopped |
+| Space | Brake without reversing |
 | A / D or Left / Right | Steer the car directly |
 | B | Request a pit stop at the next eligible start/finish entry |
 | R | Recover with an five-second time penalty and immediate driving |
 | Escape | Pause and edit AI difficulty or the next pit service |
 
-Touch buttons are available on narrow screens. Planned pit entry opens at the start of lap 2 onward. Tires, repairs and fuel are serviced while stopped alongside the track.
+Touch buttons are available on narrow screens. Planned stops apply to Grand Prix and championship races only, once on each specified lap from lap 2 onward. Practice and time trial have manual pit requests only. The HUD shows the next planned pit lap or NO PLANNED STOP. Tires, repairs and fuel are serviced while stopped alongside the track.
 
 ## Scope
 
@@ -55,12 +56,16 @@ The race renderer uses native WebGL with a depth buffer, procedural asphalt/gras
 
 ## Verification
 
-`npm test` runs 27 regression checks, including a complete two-lap race, AI finishes on all three presets in clear/heavy-rain conditions, high-speed collisions around both walls, gravel effects, tire/fuel/pit behavior, retirement, and ghost/recovery handling.
+`npm test` runs 34 regression checks, including a complete two-lap race, AI finishes on all three presets in clear/heavy-rain conditions, high-speed collisions around both walls, gravel effects, tire/fuel/pit behavior, retirement, and ghost/recovery handling.
 
-Open `http://localhost:5173/tests/browser.html` and choose **Run UI checks** for 31 repeatable browser integration checks, including keyboard driving, custom tracks, all ten car setups, model export, season strategies, ghosts, and backup/import. They use the isolated `apex-formula-test` save, preserving your normal paddock. The same page provides visual scene checks by circuit, sector, weather, and ghost visibility. Custom self-intersecting circuits remain unsupported; keep the racing corridor clear of itself.
+Open `http://localhost:5173/tests/browser.html` and choose **Run UI checks** for 35 repeatable browser integration checks, including keyboard driving, custom tracks, all ten car setups, model export, season strategies, ghosts, and backup/import. They use the isolated `apex-formula-test` save, preserving your normal paddock. The same page provides visual scene checks by circuit, sector, weather, and ghost visibility. Custom self-intersecting circuits remain unsupported; keep the racing corridor clear of itself.
 
 ## Driving assists and AI
 
-S / Down / Space overrides held throttle. Gravel slows the car but permits driving away from rest; steering at speed induces oversteer and sliding. R services and recenters the car immediately, adds five seconds, and invalidates the current lap.
+Braking overrides held throttle. Hold S / Down to brake to a stop and then reverse (up to 29 km/h). W stops reverse motion before accelerating forward; Space brakes without reversing. Steering sensitivity is reduced and input ramps in and recenters smoothly. A healthy car can accelerate past 50 km/h on gravel from rest; steering at speed induces oversteer and sliding. R services and recenters the car immediately, adds five seconds, and invalidates the current lap.
 
-A dynamic racing line appears in every driving mode: green to accelerate, yellow to lift, red to brake. Guidance accounts for upcoming bends, tire grip, wear and weather. AI difficulty spans 0 (easy) to 100 (hard), available in Grand Prix setup, championship strategy, and the race pause menu; changes save for later sessions.
+A dynamic racing line appears in every driving mode: green to accelerate, yellow to lift, red to brake. The path smooths corner apexes and exits within the available road width; speed guidance uses actual steering authority, braking distance, tire grip, wear, weather and component damage. AI difficulty spans 0 (easy) to 100 (hard), available in Grand Prix setup, championship strategy, and the race pause menu; changes save for later sessions.
+
+### Component damage
+
+The HUD car diagram colors the front wing, rear wing, chassis, engine and suspension separately: green (intact), yellow (under 25%), dark yellow (25–49%), orange (50–74%), red (75%+). Percentages indicate damage, not remaining health. Front impacts damage the front wing; rear impacts damage the rear wing and engine; side impacts damage suspension. Impact speed controls severity. Wing damage reduces turning grip, suspension damage reduces steering response, and engine/chassis damage reduces top speed. Repairs and recovery update the diagram immediately.

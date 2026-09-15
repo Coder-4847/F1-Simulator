@@ -1,7 +1,9 @@
+import {steeringRate,cornerLimit,damageColor,damageDiagram} from '../src/handling.js';
+import {racingPath,guideSpeed} from '../src/racing-line.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {defaultState,makeTrack,atTrack,angleDiff,TIRES,tireGrip,scoreSeason,formatTime} from '../src/core.js';
-import {createRace,stepRace,recover,standings} from '../src/race.js';
+import {createRace,stepRace,recover,standings,impact} from '../src/race.js';
 import {resetWorld,moveWithinBarriers,footprintClearance,SURFACES,surfaceAt,ghostPose} from '../src/world.js';
 import {buildWorld,buildRacingLine} from '../src/scene.js';
 import {carMesh} from '../src/render.js';
@@ -33,7 +35,7 @@ test('gravel slows the car, wears tires faster and retains lateral slip',()=>{
 test('no stationary steering and no road-induced change in world direction',()=>{
   const r=fixture('test'),p=r.cars[0];resetWorld(r.track,p);const h=p.heading;
   for(let i=0;i<100;i++)stepRace(r,new Set(['d']),.02);
-  assert.equal(p.heading,h);p.speed=20;const start={...p.world};
+  assert.equal(p.heading,h);r.steer=0;p.speed=20;const start={...p.world};
   for(let i=0;i<20;i++)stepRace(r,new Set(['w']),.02);
   assert.ok(Math.abs(angleDiff(Math.atan2(p.world.x-start.x,p.world.z-start.z),h))<1e-8);
 });
@@ -72,7 +74,7 @@ test('wet tires outperform slicks in heavy rain and tire wear reduces grip',()=>
 test('throttle moves the car, consumes fuel and wears tires; brake slows it',()=>{const r=fixture('test'),p=r.cars[0];for(let i=0;i<200;i++)stepRace(r,new Set(['w']),.02);assert.ok(p.speed>10);assert.ok(p.distance>10);assert.ok(p.fuel<30);assert.ok(p.wear>0);const speed=p.speed;for(let i=0;i<50;i++)stepRace(r,new Set(['s']),.02);assert.ok(p.speed<speed);});
 test('pause and countdown do not advance race timing',()=>{const r=fixture();r.paused=true;stepRace(r,new Set(['w']),.05);assert.equal(r.elapsed,0);r.paused=false;r.countdown=2;stepRace(r,new Set(['w']),.05);assert.equal(r.elapsed,0);assert.equal(r.cars[0].distance,0);});
 test('lap crossing records a replay and completes the requested race distance',()=>{const r=fixture();r.config.laps=1;r.cars[0].distance=r.track.length-.1;r.cars[0].speed=30;r.elapsed=70;const records=[];stepRace(r,new Set(['w']),.02,v=>records.push(v));assert.equal(records.length,1);assert.equal(r.finished,true);assert.equal(r.lap,2);assert.ok(records[0].ghost.samples.length>=2);assert.equal(records[0].ghost.samples.at(-1).d,r.track.length);});
-test('planned pit stop changes tires, repairs wing and refuels exactly once',()=>{const r=fixture('test'),p=r.cars[0];p.distance=r.track.length+10;r.lap=2;p.fuel=2;p.wing=40;p.damage=30;stepRace(r,new Set(),.02);assert.ok(p.pitTime>0);for(let i=0;i<300;i++)stepRace(r,new Set(),.02);assert.equal(p.tire,'hard');assert.equal(p.wing,0);assert.ok(p.damage<30);assert.equal(p.fuel,30);assert.equal(p.pitTime<=0,true);assert.deepEqual(p.pitted,[2]);});
+test('planned pit stop changes tires, repairs wing and refuels exactly once',()=>{const r=fixture('race'),p=r.cars[0];p.distance=r.track.length+10;r.lap=2;p.fuel=2;p.wing=40;p.damage=30;stepRace(r,new Set(),.02);assert.ok(p.pitTime>0);for(let i=0;i<300;i++)stepRace(r,new Set(),.02);assert.equal(p.tire,'hard');assert.equal(p.wing,0);assert.ok(p.damage<30);assert.equal(p.fuel,30);assert.equal(p.pitTime<=0,true);assert.deepEqual(p.pitted,[2]);});
 test('barrier contact damages the car unless damage is disabled',()=>{for(const enabled of [true,false]){const r=fixture('test'),p=r.cars[0];r.config.damage=enabled;p.offset=r.track.width/2+5;p.speed=40;resetWorld(r.track,p);p.heading+=Math.PI/2;p.travelHeading=p.heading;stepRace(r,new Set(),.02);assert.equal(p.damage>0,enabled);assert.ok(p.speed<40);}});
 test('recovery services an empty car without advancing track progress',()=>{const r=fixture('test'),p=r.cars[0];p.distance=100;p.fuel=0;r.elapsed=20;recover(r);assert.equal(p.distance,100);assert.equal(r.elapsed,25);for(let i=0;i<410;i++)stepRace(r,new Set(),.02);assert.equal(p.fuel,30);});
 test('championship points and completed-car order are stable',()=>{assert.deepEqual(scoreSeason([[0,1,2,3,4,5,6,7,8,9],[1,0,2,3,4,5,6,7,8,9]]).slice(0,3),[43,43,30]);const r=fixture();r.cars[2].finished=true;r.cars[2].finishTime=50;assert.equal(standings(r)[0].id,2);assert.equal(formatTime(91.234),'1:31.234');});
@@ -103,4 +105,70 @@ test('difficulty endpoints change AI pace and zero is preserved',()=>{
 test('racing line is finite and changes from green to braking red with speed',()=>{
   const r=fixture('test'),p=r.cars[0],slow=buildRacingLine(r);p.speed=100;const fast=buildRacingLine(r);
   assert.ok(slow.length>1000&&slow.every(Number.isFinite));assert.notDeepEqual(slow,fast);
+});
+
+
+test('planned pits run once on specified laps, never each lap or during practice',()=>{
+  const r=fixture();r.cars=r.cars.slice(0,1);r.config.laps=8;r.pitPlan=[{lap:2,tire:'hard'},{lap:4,tire:'medium'}];const p=r.cars[0];
+  for(let lap=2;lap<=5;lap++){
+    p.distance=(lap-1)*r.track.length+10;p.offset=0;resetWorld(r.track,p);r.lap=lap;
+    stepRace(r,new Set(),.02);assert.equal(p.pitTime>0,[2,4].includes(lap));
+    for(let i=0;i<300;i++)stepRace(r,new Set(),.02);
+    assert.equal(p.pitTime,0);
+  }
+  assert.deepEqual(p.pitted,[2,4]);
+  for(const mode of ['test','ghost']){const practice=fixture(mode);practice.cars[0].distance=practice.track.length+10;stepRace(practice,new Set(),.02);assert.equal(practice.cars[0].pitTime,0);}
+});
+test('S brakes through zero then reverses, W stops reverse before driving forwards',()=>{
+  const r=fixture('test'),p=r.cars[0];p.speed=10;
+  stepRace(r,new Set(['s']),.02);assert.ok(p.speed>0&&p.speed<10);
+  for(let i=0;i<130;i++)stepRace(r,new Set(['s']),.02);
+  assert.ok(p.speed<0&&p.speed>=-8);const d=p.distance,f=p.fuel,w=p.wear;
+  for(let i=0;i<20;i++)stepRace(r,new Set(['s']),.02);
+  assert.ok(p.distance<d);assert.ok(p.fuel<f);assert.ok(p.wear>w);
+  for(let i=0;i<150;i++)stepRace(r,new Set(['w']),.02);
+  assert.ok(p.speed>0);
+  for(let i=0;i<150;i++)stepRace(r,new Set([' ']),.02);
+  assert.equal(p.speed,0);
+});
+test('steering ramps in, recenters smoothly, and reverses direction while backing',()=>{
+  const r=fixture('test'),p=r.cars[0];p.speed=20;resetWorld(r.track,p);const h=p.heading;
+  stepRace(r,new Set(['d']),.02);assert.ok(r.steer>0&&r.steer<.2);const first=p.heading-h;
+  for(let i=0;i<20;i++)stepRace(r,new Set(['d']),.02);
+  const held=r.steer;stepRace(r,new Set(),.02);assert.ok(r.steer>0&&r.steer<held);assert.ok(first<.01);
+  recover(r);p.speed=-4;const before=p.heading;stepRace(r,new Set(['s','d']),.02);assert.ok(angleDiff(p.heading,before)<0);
+});
+test('healthy car accelerates beyond 50 kph on gravel after a complete stop',()=>{
+  const s=defaultState(),track=makeTrack(s.tracks[0].points);
+  // Enlarge this circuit so the launch section is effectively straight for the test duration.
+  for(const p of track.samples){p.x*=100;p.z*=100;p.s*=100;p.seg*=100;}track.length*=100;
+  const r=createRace(s,track,'test'),p=r.cars[0];r.countdown=0;p.offset=track.width/2+3;resetWorld(track,p);
+  for(let i=0;i<1200;i++)stepRace(r,new Set(['w']),.02);
+  assert.equal(p.surface,'gravel');assert.ok(p.speed*3.6>=50,`Only ${p.speed*3.6} kph`);
+});
+test('impact location determines damaged components and severity affects handling',()=>{
+  const front=fixture('test'),rear=fixture('test'),side=fixture('test');
+  for(const r of [front,rear,side])resetWorld(r.track,r.cars[0]);
+  const h=front.cars[0].heading;
+  impact(front,front.cars[0],30,-Math.sin(h),-Math.cos(h));
+  impact(rear,rear.cars[0],30,Math.sin(h),Math.cos(h));
+  impact(side,side.cars[0],30,Math.cos(h),-Math.sin(h));
+  assert.ok(front.cars[0].wing>rear.cars[0].wing);assert.ok(rear.cars[0].engine>front.cars[0].engine);assert.ok(side.cars[0].suspension>front.cars[0].suspension);
+  const p=fixture('test').cars[0];p.speed=40;const healthy=steeringRate(p,'Clear');p.wing=20;const light=steeringRate(p,'Clear');p.wing=80;assert.ok(healthy>light&&light>steeringRate(p,'Clear'));
+  assert.equal(new Set([0,10,30,60,90].map(damageColor)).size,5);assert.ok(damageDiagram(rear.cars[0]).includes('Engine: 24% damage'));
+});
+test('racing guide stays inside track and its speed follows the actual steering limit',()=>{
+  const r=fixture('test'),p=r.cars[0];
+  for(const preset of defaultState().tracks){const t=makeTrack(preset.points,preset.width);assert.ok(racingPath(t).points.every(p=>Math.abs(p.offset)<=t.width/2-2.19));}
+  const k=.015,v=cornerLimit(p,'Clear',k);p.speed=v;assert.ok(Math.abs(steeringRate(p,'Clear')/v-k)<.00001);
+  const path=racingPath(r.track),index=path.points.reduce((best,p,i)=>Math.abs(p.curvature)>Math.abs(path.points[best].curvature)?i:best,0),distance=index*path.step;
+  const healthy=guideSpeed(r,distance);p.wing=90;assert.ok(guideSpeed(r,distance)<healthy);
+});
+
+test('engine damage reduces attainable speed without applying front wing damage',()=>{
+  const healthy=fixture('test'),damaged=fixture('test');
+  for(const r of [healthy,damaged]){r.cars[0].speed=60;resetWorld(r.track,r.cars[0]);}
+  damaged.cars[0].engine=90;
+  stepRace(healthy,new Set(['w']),.02);stepRace(damaged,new Set(['w']),.02);
+  assert.ok(damaged.cars[0].speed<healthy.cars[0].speed*.8);assert.equal(damaged.cars[0].wing,0);
 });

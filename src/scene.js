@@ -1,4 +1,5 @@
-import {atTrack,angleDiff,clamp,tireGrip} from './core.js';
+import {atTrack,angleDiff} from './core.js';
+import {linePoint,guideSpeed} from './racing-line.js';
 import {RUNOFF,edgePoint,barrierSegments,ghostPose} from './world.js';
 
 const views=new WeakMap();
@@ -15,21 +16,13 @@ class Mesh {
   }
   cone(x,z,y,r,h,color){for(let i=0;i<8;i++){const a=i*Math.PI/4,b=(i+1)*Math.PI/4;this.face([[x+Math.cos(a)*r,y,z+Math.sin(a)*r],[x,y+h,z],[x+Math.cos(b)*r,y,z+Math.sin(b)*r]],color);}}
 }
-// Dashed guide follows a smooth inside offset; colors include braking distance to upcoming bends.
+// Colors use the same steering authority as the player, with a small turn-in margin.
 export function buildRacingLine(race){
   const mesh=new Mesh(),p=race.cars[0],track=race.track;
-  const point=d=>{const turn=angleDiff(atTrack(track,d+24).yaw,atTrack(track,d-24).yaw);return atTrack(track,d,-clamp(turn*4,-track.width*.22,track.width*.22));};
-  const grip=tireGrip(p.tire,race.weather,p.wear)*(1+(p.setup.downforce-50)*.004)*(1-p.wing*.003);
-  const braking=Math.max(4,(14+p.setup.brakes*.13)*grip*.75);
   for(let d=Math.floor(p.distance/5)*5;d<p.distance+240;d+=5){
-    let target=p.setup.topSpeed/3.6;
-    for(let look=0;look<=120;look+=15){
-      const bend=Math.abs(angleDiff(atTrack(track,d+look+45).yaw,atTrack(track,d+look).yaw));
-      const corner=clamp(90-bend*85,20,95)*Math.sqrt(grip);
-      target=Math.min(target,Math.sqrt(corner*corner+2*braking*look));
-    }
-    const color=p.speed>target+3?'#ff3333':p.speed>target-7?'#ffd52a':'#52f547';
-    const a=point(d),b=point(d+3.6);
+    const target=guideSpeed(race,d);
+    const color=p.speed>target+2?'#ff3333':p.speed>target-3?'#ffd52a':'#52f547';
+    const a=linePoint(track,d),b=linePoint(track,d+3.6);
     mesh.face([edgePoint(a,-.42,.035),edgePoint(a,.42,.035),edgePoint(b,.42,.035),edgePoint(b,-.42,.035)],color);
   }
   return new Float32Array(mesh.data);

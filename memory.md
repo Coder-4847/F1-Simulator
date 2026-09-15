@@ -49,8 +49,8 @@ Before pushing changes, run `npm test`, then manually run the browser checks and
 - `src/render.js` — procedural car mesh, garage renderer, minimaps, and race-renderer entry point.
 - `src/scene.js` — native WebGL renderer and procedural circuit environment.
 - `src/app.js` — navigation, screens, input, state persistence, track editor, garage, race loop, seasons, import/export, and HUD.
-- `tests/simulation.test.mjs` — 27 engine/regression tests.
-- `tests/browser.html` and `tests/browser.js` — 31 isolated end-to-end browser checks and visual scene controls.
+- `tests/simulation.test.mjs` — 34 engine/regression tests.
+- `tests/browser.html` and `tests/browser.js` — 35 isolated end-to-end browser checks and visual scene controls.
 - `scripts/export-model.mjs` — regenerates the default OBJ/MTL assets.
 - `server.mjs` — dependency-free local static server.
 - `.github/workflows/ci.yml` — runs the simulation tests on pushes and pull requests.
@@ -68,8 +68,8 @@ Before pushing changes, run `npm test`, then manually run the browser checks and
 
 At this handoff:
 
-- All **27** Node simulation tests pass.
-- All **31** browser integration checks pass.
+- All **34** Node simulation tests pass.
+- All **35** browser integration checks pass.
 - The AI completes all three preset circuits in clear and heavy-rain conditions.
 - Barrier stress tests try 30-meter movements through both walls around every preset circuit.
 - Browser checks cover keyboard driving/braking, Track Studio persistence, all ten car setups, OBJ/MTL export, seasons, multi-stop strategy, weather, fuel, backup/import, ghosts, WebGL rendering, and reload persistence.
@@ -96,3 +96,13 @@ When resuming work, read this file and `README.md`, run both test suites, and pr
 - Every driving mode renders a dashed green/yellow/red racing guide, with upcoming-corner braking distances, weather, wear and tire grip affecting its colors.
 - AI difficulty spans 0–100, with controls in Grand Prix setup, championship strategy and the live race pause menu. Live changes persist.
 - Validation: 27 simulation checks and 31 browser checks; dry and heavy-rain scenes visually checked with WebGL error 0.
+
+## Follow-up driving update (2026-09-15)
+
+- Planned stops apply only to races, once per configured lap. Pit timers clamp to zero after service so later planned stops work. Re-entry on the same lap is blocked. Practice/time trial explain manual-only service; HUD names the next pit lap.
+- S/Down brakes forward motion and then reverses to a maximum 8 m/s. W brakes reverse motion before driving forward; Space is brake-only. Speed is now signed in simulation, absolute in HUD, fuel and wear; reverse displays R.
+- Steering uses exponential input smoothing (7/s), lower steering authority (1.12 base versus 1.55), and correct reverse steering.
+- Gravel drive traction is independent from lateral grip. Speed-dependent resistance permits a healthy car to exceed 50 km/h from rest while retaining loose handling.
+- src/handling.js shares steering limits and grip between player physics and racing guidance, and provides the component damage diagram. Front wing/rear wing/suspension/engine/chassis have distinct HUD colors and damage percentages. Collision direction selects the affected component; impact speed sets severity.
+- src/racing-line.js caches a bounded smoothed circuit path and computes braking guidance from actual steering authority instead of the old arbitrary corner-speed formula.
+- Verification: 34 simulation checks; 35 browser checks including reverse, damage HUD and AI settings. Dry and wet scenes inspected.
