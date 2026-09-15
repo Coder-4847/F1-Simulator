@@ -42,6 +42,9 @@ document.querySelector('#run').onclick=async()=>{
     const speed=Number(doc().querySelector('#hud-speed').textContent);assert(speed>10,'Browser keyboard throttle drives the car');
     press('keydown','s');await sleep(900);press('keyup','s');
     assert(Number(doc().querySelector('#hud-speed').textContent)<speed,'Browser keyboard brake slows the car');
+    press('keydown','r');press('keyup','r');press('keydown','w');await sleep(500);press('keyup','w');
+    assert(Number(doc().querySelector('#hud-speed').textContent)>0,'Recovery permits immediate driving');
+    assert(doc().querySelector('#race-canvas').dataset.racingLine==='dynamic','Dynamic racing line renders');
     click('[data-action="pause"]');assert(doc().querySelector('#live-pit-tire'),'Pause exposes live tire and fuel strategy');
     set('#live-pit-tire','wet');set('#live-pit-fuel',47);click('[data-action="end-session"]');click('[data-nav="dashboard"]');
     click('[data-nav="garage"]');
@@ -61,10 +64,11 @@ document.querySelector('#run').onclick=async()=>{
     click('[data-action="add-round"]');assert(saved().season.rounds.length===2&&saved().season.rounds[0].pits.length===2,'Season calendar supports custom tracks and multiple tire stops');
     const custom=saved().seasonId;set('#season-switch','series-2026');set('#season-switch',custom);
     assert(doc().querySelector('#season-name').value==='Regression Season','Multiple seasons survive switching');
+    set('#race-difficulty',0,'input');assert(saved().race.difficulty===0,'Championship difficulty saves easy endpoint');
     click('[data-action="season-race"]');await sleep(250);
     assert(doc().querySelector('.weather-badge').textContent.includes('Heavy rain')&&doc().querySelector('#tire-label').textContent==='WET','Round weather and starting tires reach the race');
     assert(doc().querySelectorAll('.leader-row').length===10&&doc().querySelector('#hud-fuel').textContent.includes('52.0'),'Ten-car grid and round fuel reach the HUD');
-    click('[data-action="pause"]');click('[data-action="end-session"]');click('[data-nav="season"]');
+    click('[data-action="pause"]');assert(doc().querySelector('#live-difficulty').value==='0','Championship difficulty reaches race');set('#live-difficulty',93);assert(saved().race.difficulty===93,'Live AI difficulty persists');click('[data-action="end-session"]');click('[data-nav="season"]');
     assert(saved().season.results.length===0,'Abandoned round does not award championship points');
     click('[data-action="random-weather"]');assert(saved().season.rounds.every(r=>['Clear','Overcast','Light rain','Heavy rain'].includes(r.weather)),'Random forecasts stay valid');
     click('[data-action="export-data"]');const backup=await downloads.find(d=>d.name==='apex-paddock.json').text;

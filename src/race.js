@@ -3,6 +3,7 @@ import {SURFACES,surfaceAt,moveWithinBarriers,resetWorld} from './world.js';
 
 export function createRace(state,track,mode='race',round=null){
   const config={...state.race,...(round?{laps:round.laps,weather:round.weather,tire:round.tire||state.race.tire,fuel:round.fuel??state.race.fuel}:{} )};
+  config.difficulty=clamp(Number.isFinite(Number(config.difficulty))?Number(config.difficulty):70,0,100);
   const grid=mode==='race'?10:1;
   const cars=Array.from({length:grid},(_,id)=>{const team=TEAMS[Math.floor(id/2)];return {id,name:team.drivers[id%2],team:team.name,color:team.color,setup:{...state.car,...(id===0?{}:state.cars[id]||{})},livery:id===0?{...state.car}:{primary:team.color,secondary:team.secondary,accent:'#edf1db',number:id+8,pattern:'Split',...(state.cars[id]||{})},distance:-id*7,offset:id%2?2.4:-2.4,heading:null,speed:0,tire:config.tire,wear:0,fuel:config.fuel,damage:0,wing:0,engine:0,suspension:0,pitTime:0,pitted:[],finished:false,finishTime:0,collisionCooldown:0};});
   cars[0].offset=0;cars[0].distance=0;
@@ -35,15 +36,17 @@ export function stepRace(r,keys,dt,onLap=()=>{}){
     const cornerSpeed=clamp(90-curvature*85,20,95)*Math.sqrt(grip);
     let throttle=1,brake=0;
     if(c.id===0){throttle=(keys.has('ArrowUp')||keys.has('w'))?1:0;brake=(keys.has('ArrowDown')||keys.has('s')||keys.has(' '))?1:0;
+      if(brake)throttle=0;
       if(!Number.isFinite(c.heading))c.heading=pos.yaw;
       const steeringRate=(1.55/(1+c.speed*.012))*clamp(c.speed/10,0,1)*grip*(1-c.suspension*.004)*(.8+setup.suspension*.004);
-      c.heading+=r.steer*steeringRate*dt;
+      c.yawSlip=(c.yawSlip||0)*Math.exp(-dt*3)+r.steer*surface.loose*clamp((c.speed-5)/20,0,1)*dt*3;
+      c.heading+=(r.steer*steeringRate+c.yawSlip)*dt;
       c.travelHeading ??= c.heading;
       c.travelHeading+=angleDiff(c.heading,c.travelHeading)*(1-Math.exp(-dt*(surface.loose?2.2:24)));
       const turn=angleDiff(ahead.yaw,pos.yaw);
       if(c.speed>cornerSpeed*1.2&&Math.abs(turn)>.15)r.offTrackTime+=dt;else r.offTrackTime=0;
     }else{
-      const target=Math.min(setup.topSpeed/3.6,cornerSpeed)*( .73+r.config.difficulty*.0023+(c.id%3)*.014);
+      const target=Math.min(setup.topSpeed/3.6,cornerSpeed)*( .50+r.config.difficulty*.0046+(c.id%3)*.014);
       throttle=c.speed<target?1:.13;brake=c.speed>target+3?.7:0;
       let targetOffset=(c.id%2?1:-1)*2.3+Math.sin(r.elapsed*.45+c.id)*.65;
       const front=r.cars.find(o=>o!==c&&o.distance>c.distance&&o.distance-c.distance<18&&Math.abs(o.offset-c.offset)<1.9);
@@ -53,7 +56,7 @@ export function stepRace(r,keys,dt,onLap=()=>{}){
     const offroad=Math.abs(c.offset)>r.track.width/2;
     const top=(setup.topSpeed/3.6)*(1-(setup.downforce-50)*.0018)*(1-c.engine*.006)*(1-c.damage*.0015);
     const mass=1+c.fuel*.006;
-    const acceleration=throttle*(12.5*(1-c.speed/(top*1.13)))*grip/mass-brake*(14+setup.brakes*.13)*grip-.45-c.speed*c.speed*.00013-surface.drag*(1+c.speed*.08);
+    const acceleration=throttle*(12.5*(1-c.speed/(top*1.13)))*grip/mass-brake*(14+setup.brakes*.13)*grip-.45-c.speed*c.speed*.00013-surface.drag*(clamp(c.speed/6,0,1)+c.speed*.08);
     c.speed=clamp(c.speed+acceleration*dt,0,c.fuel<=0?0:top);
     if(!c.world)resetWorld(r.track,c);
     let dx,dz,nextDistance,nextOffset;
@@ -88,4 +91,10 @@ export function stepRace(r,keys,dt,onLap=()=>{}){
 }
 function impact(r,c,strength){if(!r.config.damage)return;c.damage=clamp(c.damage+strength,0,100);c.wing=clamp(c.wing+strength*1.4,0,100);c.engine=clamp(c.engine+strength*.3,0,100);c.suspension=clamp(c.suspension+strength*.65,0,100);if(c.id===0)message(r,'Contact · front wing and suspension damaged');}
 export function standings(r){return [...r.cars].sort((a,b)=>Boolean(a.retired||(r.dnf&&a.id===0))-Boolean(b.retired||(r.dnf&&b.id===0))||(a.finished&&b.finished?a.finishTime-b.finishTime:a.finished?-1:b.finished?1:b.distance-a.distance));}
-export function recover(r){const p=r.cars[0];p.offset=0;resetWorld(r.track,p);r.invalidLap=true;p.speed=0;p.pitTime=8;p.nextTire=r.pitTire;r.elapsed+=8;message(r,'Recovery · 8 second penalty + service',8);}
+export function recover(r){
+  const p=r.cars[0];p.offset=0;resetWorld(r.track,p);r.invalidLap=true;p.speed=0;p.yawSlip=0;p.pitTime=0;r.pitRequested=false;
+  const lap=Math.max(1,Math.floor(p.distance/r.track.length)+1);
+  if(r.pitPlan.some(stop=>stop.lap===lap)&&!p.pitted.includes(lap))p.pitted.push(lap);
+  p.tire=r.pitTire;p.wear=0;p.wing=0;p.damage*=.3;p.suspension*=.5;p.engine*=.7;p.fuel=r.pitFuel;
+  r.elapsed+=5;r.lapTime=r.elapsed-r.lapStart;message(r,'Recovery · +5 seconds · drive now',3);
+}

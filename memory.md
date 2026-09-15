@@ -1,6 +1,6 @@
 # APEX Formula Simulator — Project Handoff
 
-Last updated: 2026-09-13
+Last updated: 2026-09-15
 
 ## Project identity
 
@@ -49,8 +49,8 @@ Before pushing changes, run `npm test`, then manually run the browser checks and
 - `src/render.js` — procedural car mesh, garage renderer, minimaps, and race-renderer entry point.
 - `src/scene.js` — native WebGL renderer and procedural circuit environment.
 - `src/app.js` — navigation, screens, input, state persistence, track editor, garage, race loop, seasons, import/export, and HUD.
-- `tests/simulation.test.mjs` — 23 engine/regression tests.
-- `tests/browser.html` and `tests/browser.js` — 26 isolated end-to-end browser checks and visual scene controls.
+- `tests/simulation.test.mjs` — 27 engine/regression tests.
+- `tests/browser.html` and `tests/browser.js` — 31 isolated end-to-end browser checks and visual scene controls.
 - `scripts/export-model.mjs` — regenerates the default OBJ/MTL assets.
 - `server.mjs` — dependency-free local static server.
 - `.github/workflows/ci.yml` — runs the simulation tests on pushes and pull requests.
@@ -68,8 +68,8 @@ Before pushing changes, run `npm test`, then manually run the browser checks and
 
 At this handoff:
 
-- All **23** Node simulation tests pass.
-- All **26** browser integration checks pass.
+- All **27** Node simulation tests pass.
+- All **31** browser integration checks pass.
 - The AI completes all three preset circuits in clear and heavy-rain conditions.
 - Barrier stress tests try 30-meter movements through both walls around every preset circuit.
 - Browser checks cover keyboard driving/braking, Track Studio persistence, all ten car setups, OBJ/MTL export, seasons, multi-stop strategy, weather, fuel, backup/import, ghosts, WebGL rendering, and reload persistence.
@@ -87,3 +87,12 @@ At this handoff:
 GitHub Pages deploys the static project from the `main` branch and repository root. The separate `Simulator Tests` workflow runs `npm test` on pushes and pull requests.
 
 When resuming work, read this file and `README.md`, run both test suites, and preserve the `apex-formula-v1` schema unless a migration is added.
+
+## Driving update (2026-09-15)
+
+- Brake overrides simultaneous throttle; S, Down and Space remain brake bindings.
+- Gravel resistance scales from zero at rest so throttle can get the car moving; turning at speed adds decaying yaw slip for oversteer.
+- R immediately recenters/services the car, adds five seconds, invalidates the lap and clears pit holds/requests. A planned stop for the current lap is marked serviced to avoid a new hold immediately after reset.
+- Every driving mode renders a dashed green/yellow/red racing guide, with upcoming-corner braking distances, weather, wear and tire grip affecting its colors.
+- AI difficulty spans 0–100, with controls in Grand Prix setup, championship strategy and the live race pause menu. Live changes persist.
+- Validation: 27 simulation checks and 31 browser checks; dry and heavy-rain scenes visually checked with WebGL error 0.

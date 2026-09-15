@@ -31,8 +31,8 @@ Open **http://localhost:5173**. Run the simulation checks with `npm test`.
 | S / Down / Space | Brake |
 | A / D or Left / Right | Steer the car directly |
 | B | Request a pit stop at the next eligible start/finish entry |
-| R | Recover with an eight-second time penalty and service delay |
-| Escape | Pause and edit the next pit service |
+| R | Recover with an five-second time penalty and immediate driving |
+| Escape | Pause and edit AI difficulty or the next pit service |
 
 Touch buttons are available on narrow screens. Planned pit entry opens at the start of lap 2 onward. Tires, repairs and fuel are serviced while stopped alongside the track.
 
@@ -55,6 +55,12 @@ The race renderer uses native WebGL with a depth buffer, procedural asphalt/gras
 
 ## Verification
 
-`npm test` runs 23 regression checks, including a complete two-lap race, AI finishes on all three presets in clear/heavy-rain conditions, high-speed collisions around both walls, gravel effects, tire/fuel/pit behavior, retirement, and ghost/recovery handling.
+`npm test` runs 27 regression checks, including a complete two-lap race, AI finishes on all three presets in clear/heavy-rain conditions, high-speed collisions around both walls, gravel effects, tire/fuel/pit behavior, retirement, and ghost/recovery handling.
 
-Open `http://localhost:5173/tests/browser.html` and choose **Run UI checks** for 26 repeatable browser integration checks, including keyboard driving, custom tracks, all ten car setups, model export, season strategies, ghosts, and backup/import. They use the isolated `apex-formula-test` save, preserving your normal paddock. The same page provides visual scene checks by circuit, sector, weather, and ghost visibility. Custom self-intersecting circuits remain unsupported; keep the racing corridor clear of itself.
+Open `http://localhost:5173/tests/browser.html` and choose **Run UI checks** for 31 repeatable browser integration checks, including keyboard driving, custom tracks, all ten car setups, model export, season strategies, ghosts, and backup/import. They use the isolated `apex-formula-test` save, preserving your normal paddock. The same page provides visual scene checks by circuit, sector, weather, and ghost visibility. Custom self-intersecting circuits remain unsupported; keep the racing corridor clear of itself.
+
+## Driving assists and AI
+
+S / Down / Space overrides held throttle. Gravel slows the car but permits driving away from rest; steering at speed induces oversteer and sliding. R services and recenters the car immediately, adds five seconds, and invalidates the current lap.
+
+A dynamic racing line appears in every driving mode: green to accelerate, yellow to lift, red to brake. Guidance accounts for upcoming bends, tire grip, wear and weather. AI difficulty spans 0 (easy) to 100 (hard), available in Grand Prix setup, championship strategy, and the race pause menu; changes save for later sessions.

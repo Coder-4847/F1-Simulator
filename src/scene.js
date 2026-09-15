@@ -1,4 +1,4 @@
-import {atTrack,angleDiff} from './core.js';
+import {atTrack,angleDiff,clamp,tireGrip} from './core.js';
 import {RUNOFF,edgePoint,barrierSegments,ghostPose} from './world.js';
 
 const views=new WeakMap();
@@ -14,6 +14,25 @@ class Mesh {
     for(const f of [[0,1,2,3],[4,7,6,5],[0,3,7,4],[1,5,6,2],[3,2,6,7]])this.face(f.map(i=>p[i]),color);
   }
   cone(x,z,y,r,h,color){for(let i=0;i<8;i++){const a=i*Math.PI/4,b=(i+1)*Math.PI/4;this.face([[x+Math.cos(a)*r,y,z+Math.sin(a)*r],[x,y+h,z],[x+Math.cos(b)*r,y,z+Math.sin(b)*r]],color);}}
+}
+// Dashed guide follows a smooth inside offset; colors include braking distance to upcoming bends.
+export function buildRacingLine(race){
+  const mesh=new Mesh(),p=race.cars[0],track=race.track;
+  const point=d=>{const turn=angleDiff(atTrack(track,d+24).yaw,atTrack(track,d-24).yaw);return atTrack(track,d,-clamp(turn*4,-track.width*.22,track.width*.22));};
+  const grip=tireGrip(p.tire,race.weather,p.wear)*(1+(p.setup.downforce-50)*.004)*(1-p.wing*.003);
+  const braking=Math.max(4,(14+p.setup.brakes*.13)*grip*.75);
+  for(let d=Math.floor(p.distance/5)*5;d<p.distance+240;d+=5){
+    let target=p.setup.topSpeed/3.6;
+    for(let look=0;look<=120;look+=15){
+      const bend=Math.abs(angleDiff(atTrack(track,d+look+45).yaw,atTrack(track,d+look).yaw));
+      const corner=clamp(90-bend*85,20,95)*Math.sqrt(grip);
+      target=Math.min(target,Math.sqrt(corner*corner+2*braking*look));
+    }
+    const color=p.speed>target+3?'#ff3333':p.speed>target-7?'#ffd52a':'#52f547';
+    const a=point(d),b=point(d+3.6);
+    mesh.face([edgePoint(a,-.42,.035),edgePoint(a,.42,.035),edgePoint(b,.42,.035),edgePoint(b,-.42,.035)],color);
+  }
+  return new Float32Array(mesh.data);
 }
 export function buildWorld(track){
   const m=new Mesh(),half=track.width/2,a=track.samples;
@@ -139,6 +158,9 @@ export function renderScene(canvas,race,dt,carMesh){
   const bind=buffer=>{gl.bindBuffer(gl.ARRAY_BUFFER,buffer);v.attributes.forEach((a,i)=>{gl.enableVertexAttribArray(a);gl.vertexAttribPointer(a,i===2?1:3,gl.FLOAT,false,28,i===0?0:i===1?12:24);});};
   if(v.track!==race.track){v.track=race.track;const data=buildWorld(race.track);v.count=data.length/7;gl.bindBuffer(gl.ARRAY_BUFFER,v.world);gl.bufferData(gl.ARRAY_BUFFER,data,gl.STATIC_DRAW);}
   bind(v.world);gl.uniform3f(loc.model,0,0,0);gl.uniform1f(loc.heading,0);gl.drawArrays(gl.TRIANGLES,0,v.count);
+  const guide=buildRacingLine(race);
+  bind(v.dynamic);gl.bufferData(gl.ARRAY_BUFFER,guide,gl.DYNAMIC_DRAW);gl.drawArrays(gl.TRIANGLES,0,guide.length/7);
+  canvas.dataset.racingLine='dynamic';
   function drawCar(c,ghost=false){
     const point=c.world||atTrack(race.track,c.distance,c.offset);
     if(Math.hypot(point.x-pos.x,point.z-pos.z)>400)return;

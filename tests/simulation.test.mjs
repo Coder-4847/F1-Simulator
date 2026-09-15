@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {defaultState,makeTrack,atTrack,angleDiff,TIRES,tireGrip,scoreSeason,formatTime} from '../src/core.js';
 import {createRace,stepRace,recover,standings} from '../src/race.js';
 import {resetWorld,moveWithinBarriers,footprintClearance,SURFACES,surfaceAt,ghostPose} from '../src/world.js';
-import {buildWorld} from '../src/scene.js';
+import {buildWorld,buildRacingLine} from '../src/scene.js';
 import {carMesh} from '../src/render.js';
 
 function fixture(mode='race'){const s=defaultState(),track={...makeTrack(s.tracks[0].points,13),id:'verdant'};const r=createRace(s,track,mode);r.countdown=0;return r;}
@@ -74,9 +74,33 @@ test('pause and countdown do not advance race timing',()=>{const r=fixture();r.p
 test('lap crossing records a replay and completes the requested race distance',()=>{const r=fixture();r.config.laps=1;r.cars[0].distance=r.track.length-.1;r.cars[0].speed=30;r.elapsed=70;const records=[];stepRace(r,new Set(['w']),.02,v=>records.push(v));assert.equal(records.length,1);assert.equal(r.finished,true);assert.equal(r.lap,2);assert.ok(records[0].ghost.samples.length>=2);assert.equal(records[0].ghost.samples.at(-1).d,r.track.length);});
 test('planned pit stop changes tires, repairs wing and refuels exactly once',()=>{const r=fixture('test'),p=r.cars[0];p.distance=r.track.length+10;r.lap=2;p.fuel=2;p.wing=40;p.damage=30;stepRace(r,new Set(),.02);assert.ok(p.pitTime>0);for(let i=0;i<300;i++)stepRace(r,new Set(),.02);assert.equal(p.tire,'hard');assert.equal(p.wing,0);assert.ok(p.damage<30);assert.equal(p.fuel,30);assert.equal(p.pitTime<=0,true);assert.deepEqual(p.pitted,[2]);});
 test('barrier contact damages the car unless damage is disabled',()=>{for(const enabled of [true,false]){const r=fixture('test'),p=r.cars[0];r.config.damage=enabled;p.offset=r.track.width/2+5;p.speed=40;resetWorld(r.track,p);p.heading+=Math.PI/2;p.travelHeading=p.heading;stepRace(r,new Set(),.02);assert.equal(p.damage>0,enabled);assert.ok(p.speed<40);}});
-test('recovery services an empty car without advancing track progress',()=>{const r=fixture('test'),p=r.cars[0];p.distance=100;p.fuel=0;r.elapsed=20;recover(r);assert.equal(p.distance,100);assert.equal(r.elapsed,28);for(let i=0;i<410;i++)stepRace(r,new Set(),.02);assert.equal(p.fuel,30);});
+test('recovery services an empty car without advancing track progress',()=>{const r=fixture('test'),p=r.cars[0];p.distance=100;p.fuel=0;r.elapsed=20;recover(r);assert.equal(p.distance,100);assert.equal(r.elapsed,25);for(let i=0;i<410;i++)stepRace(r,new Set(),.02);assert.equal(p.fuel,30);});
 test('championship points and completed-car order are stable',()=>{assert.deepEqual(scoreSeason([[0,1,2,3,4,5,6,7,8,9],[1,0,2,3,4,5,6,7,8,9]]).slice(0,3),[43,43,30]);const r=fixture();r.cars[2].finished=true;r.cars[2].finishTime=50;assert.equal(standings(r)[0].id,2);assert.equal(formatTime(91.234),'1:31.234');});
 test('car mesh is finite, has four tire assemblies and responds to livery and wing loss',()=>{const car=defaultState().car,a=carMesh(car),b=carMesh({...car,primary:'#ff0000'}),damaged=carMesh(car,'medium',90);assert.ok(a.length>200);assert.ok(a.every(f=>f.p.every(v=>v.every(Number.isFinite))));assert.notDeepEqual(a,b);assert.ok(damaged.length<a.length);});
 test('individual tuning and round-specific starting strategy reach the simulation',()=>{const s=defaultState();s.cars[3]={topSpeed:250,downforce:90};const t=makeTrack(s.tracks[0].points);const r=createRace(s,t,'race',{laps:5,weather:'Heavy rain',tire:'wet',fuel:45,pits:[{lap:3,tire:'intermediate'}]});assert.equal(r.cars[3].setup.topSpeed,250);assert.equal(r.cars[0].setup.topSpeed,335);assert.equal(r.cars[0].fuel,45);assert.equal(r.cars[0].tire,'wet');assert.equal(r.pitPlan[0].lap,3);});
 test('player heading stays fixed without steering and responds to direct steering input',()=>{const r=fixture('test'),p=r.cars[0];stepRace(r,new Set(['w']),.02);const heading=p.heading;for(let i=0;i<50;i++)stepRace(r,new Set(['w']),.02);assert.equal(p.heading,heading);for(let i=0;i<50;i++)stepRace(r,new Set(['w','d']),.02);assert.ok(angleDiff(p.heading,heading)>.1);});
 test('a complete two-lap grand prix remains finite and records both laps',()=>{const r=fixture();r.config.laps=2;r.config.damage=false;let laps=0;for(let i=0;i<60000&&!r.finished;i++){const p=r.cars[0],road=atTrack(r.track,p.distance+10),target=road.yaw-Math.atan(p.offset*.12),keys=new Set(),error=angleDiff(target,p.heading??target);if(p.speed>35)keys.add('s');else keys.add('w');if(error>.012)keys.add('d');if(error<-.012)keys.add('a');stepRace(r,keys,.02,()=>laps++);}assert.equal(r.finished,true);assert.equal(laps,2);assert.equal(r.cars[0].finished,true);assert.ok(r.cars.every(c=>Number.isFinite(c.distance)&&Number.isFinite(c.speed)));assert.ok(r.cars.slice(1).every(c=>c.distance>r.track.length));});
+
+
+test('brake overrides held throttle and recovery allows immediate acceleration',()=>{
+  const r=fixture('test'),p=r.cars[0];p.speed=15;
+  for(let i=0;i<100;i++)stepRace(r,new Set(['w','s']),.02);
+  assert.equal(p.speed,0);recover(r);assert.equal(p.pitTime,0);
+  stepRace(r,new Set(['w']),.02);assert.ok(p.speed>0);
+});
+test('gravel can be driven away from rest even on wet slick tires',()=>{
+  for(const weather of ['Clear','Heavy rain']){
+    const r=fixture('test'),p=r.cars[0];r.weather=weather;p.tire='soft';p.offset=r.track.width/2+3;resetWorld(r.track,p);
+    for(let i=0;i<50;i++)stepRace(r,new Set(['w']),.02);
+    assert.ok(p.speed>.3,weather);
+  }
+});
+test('difficulty endpoints change AI pace and zero is preserved',()=>{
+  const races=[0,100].map(difficulty=>{const s=defaultState();s.race.difficulty=difficulty;const r=createRace(s,makeTrack(s.tracks[0].points));r.countdown=0;r.config.damage=false;r.cars[0].finished=true;return r;});
+  for(const r of races)for(let i=0;i<1500;i++)stepRace(r,new Set(),.02);
+  assert.equal(races[0].config.difficulty,0);assert.ok(races[1].cars[1].distance>races[0].cars[1].distance*1.15);
+});
+test('racing line is finite and changes from green to braking red with speed',()=>{
+  const r=fixture('test'),p=r.cars[0],slow=buildRacingLine(r);p.speed=100;const fast=buildRacingLine(r);
+  assert.ok(slow.length>1000&&slow.every(Number.isFinite));assert.notDeepEqual(slow,fast);
+});
