@@ -1,6 +1,6 @@
 # APEX Formula Simulator — Project Handoff
 
-Last updated: 2026-09-15
+Last updated: 2026-09-16
 
 ## Project identity
 
@@ -49,8 +49,8 @@ Before pushing changes, run `npm test`, then manually run the browser checks and
 - `src/render.js` — procedural car mesh, garage renderer, minimaps, and race-renderer entry point.
 - `src/scene.js` — native WebGL renderer and procedural circuit environment.
 - `src/app.js` — navigation, screens, input, state persistence, track editor, garage, race loop, seasons, import/export, and HUD.
-- `tests/simulation.test.mjs` — 39 engine/regression tests.
-- `tests/browser.html` and `tests/browser.js` — 52 isolated end-to-end browser checks and visual scene controls.
+- `tests/simulation.test.mjs` — 47 engine/regression tests.
+- `tests/browser.html` and `tests/browser.js` — 58 isolated end-to-end browser checks and visual scene controls.
 - `scripts/export-model.mjs` — regenerates the default OBJ/MTL assets.
 - `server.mjs` — dependency-free local static server.
 - `.github/workflows/ci.yml` — runs the simulation tests on pushes and pull requests.
@@ -68,8 +68,8 @@ Before pushing changes, run `npm test`, then manually run the browser checks and
 
 At this handoff:
 
-- All **39** Node simulation tests pass.
-- All **52** browser integration checks pass.
+- All **47** Node simulation tests pass.
+- All **58** browser integration checks pass.
 - The AI completes all three preset circuits in clear and heavy-rain conditions.
 - Barrier stress tests try 30-meter movements through both walls around every preset circuit.
 - Browser checks cover keyboard driving/braking, Track Studio persistence, all ten car setups, OBJ/MTL export, seasons, multi-stop strategy, weather, fuel, backup/import, ghosts, WebGL rendering, and reload persistence.
@@ -118,3 +118,11 @@ When resuming work, read this file and `README.md`, run both test suites, and pr
 - 39 simulation checks pass, including an entire two-human lap, independent input/service/reset, shared pause and independent finish/retirement.
 
 - Split-screen validation: 52 browser checks pass, including both orientations, independent keyboard input/pit requests/reset penalties, separate service settings, replay, and restoration of the solo pause menu. Both orientations visually inspected.
+
+## Scenery, builder and AI update (2026-09-16)
+
+- Scenery placement checks every section of the circuit, including an object's full footprint. Trees, tents and grandstands stay outside roads and runoff, including on Costa Azure.
+- Track Studio inserts nodes along the rendered curve, restores canceled drags, and avoids empty undo entries. Saving rejects crossing tracks, duplicate neighbors and sections too close for their roads and barriers.
+- Car contacts use oriented body shapes and relative impact speed. Contact forces follow the collision direction with gradual overlap correction; AI overtaking holds a lane briefly and slows behind nearby traffic.
+- AI requests extra service for worn tires, significant component damage or low fuel. Tire choice follows weather and remaining race distance; repairs and refueling support longer races. Same-lap repeat stops remain blocked.
+- Validation includes scenery clearance across all presets and widths, builder editing and persistence, contact behavior, and a ten-lap AI race with an unplanned tire stop.
