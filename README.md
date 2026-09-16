@@ -32,7 +32,7 @@ Open **http://localhost:5173**. Run the simulation checks with `npm test`.
 | Space | Brake without reversing |
 | A / D or Left / Right | Steer the car directly |
 | B | Request a pit stop at the next eligible start/finish entry |
-| R | Recover with an five-second time penalty and immediate driving |
+| R | Recover with a five-second time penalty and immediate driving |
 | Escape | Pause and edit AI difficulty or the next pit service |
 
 Touch buttons are available on narrow screens. Planned stops apply to Grand Prix and championship races only, once on each specified lap from lap 2 onward. Practice and time trial have manual pit requests only. The HUD shows the next planned pit lap or NO PLANNED STOP. Tires, repairs and fuel are serviced while stopped alongside the track.
@@ -56,9 +56,9 @@ The race renderer uses native WebGL with a depth buffer, procedural asphalt/gras
 
 ## Verification
 
-`npm test` runs 39 regression checks, including a complete two-lap race, AI finishes on all three presets in clear/heavy-rain conditions, high-speed collisions around both walls, gravel effects, tire/fuel/pit behavior, retirement, and ghost/recovery handling.
+`npm test` runs 47 regression checks, including a complete two-lap race, AI finishes on all three presets in clear/heavy-rain conditions, high-speed collisions around both walls, gravel effects, tire/fuel/pit behavior, retirement, and ghost/recovery handling.
 
-Open `http://localhost:5173/tests/browser.html` and choose **Run UI checks** for 52 repeatable browser integration checks, including keyboard driving, custom tracks, all ten car setups, model export, season strategies, ghosts, and backup/import. They use the isolated `apex-formula-test` save, preserving your normal paddock. The same page provides visual scene checks by circuit, sector, weather, and ghost visibility. Custom self-intersecting circuits remain unsupported; keep the racing corridor clear of itself.
+Open `http://localhost:5173/tests/browser.html` and choose **Run UI checks** for 58 repeatable browser integration checks, including keyboard driving, custom tracks, all ten car setups, model export, season strategies, ghosts, and backup/import. They use the isolated `apex-formula-test` save, preserving your normal paddock. The same page provides visual scene checks by circuit, sector, weather, and ghost visibility. Custom self-intersecting circuits remain unsupported; keep the racing corridor clear of itself.
 
 ## Driving assists and AI
 
@@ -85,3 +85,11 @@ In **Grand Prix → Players / screen layout**, select **Two players · side by s
 | Pause both players | Escape | Escape |
 
 The split-screen pause menu has individually labeled tire/refuel settings and no pit-request button: request service using the assigned key while driving. Screen orientation can also be changed while paused. Reset penalties apply only to the player resetting; one player finishing or retiring does not end the other's race. Results show both players. Split-screen lap bests are session-only and do not replace saved solo ghosts. Single-player bindings and its pause menu remain available when **One player** is selected. Championships, practice and time trial remain single-player.
+
+## Scenery, builder and AI update (2026-09-16)
+
+- Scenery placement checks every section of the circuit, including an object's full footprint. Trees, tents and grandstands stay outside roads and runoff, including on Costa Azure.
+- Track Studio inserts nodes along the rendered curve, restores canceled drags, and avoids empty undo entries. Saving rejects crossing tracks, duplicate neighbors and sections too close for their roads and barriers.
+- Car contacts use oriented body shapes and relative impact speed. Contact forces follow the collision direction with gradual overlap correction; AI overtaking holds a lane briefly and slows behind nearby traffic.
+- AI requests extra service for worn tires, significant component damage or low fuel. Tire choice follows weather and remaining race distance; repairs and refueling support longer races. Same-lap repeat stops remain blocked.
+- Validation includes scenery clearance across all presets and widths, builder editing and persistence, contact behavior, and a ten-lap AI race with an unplanned tire stop.

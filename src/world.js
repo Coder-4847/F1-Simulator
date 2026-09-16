@@ -84,7 +84,7 @@ export function moveWithinBarriers(track,car,dx,dz,heading=car.heading) {
   return {hit,nx,nz};
 }
 export function resetWorld(track,car) {
-  const p=atTrack(track,car.distance,car.offset);car.world={x:p.x,z:p.z};car.heading=p.yaw;car.travelHeading=p.yaw;car.steering=0;car.slip=0;
+  const p=atTrack(track,car.distance,car.offset);car.world={x:p.x,z:p.z};car.heading=p.yaw;car.travelHeading=p.yaw;car.steering=0;car.slip=0;car.contactVX=0;car.contactVZ=0;
 }
 export function ghostPose(ghost,time,track) {
   const a=ghost?.samples;if(!a?.length||time>ghost.time)return null;

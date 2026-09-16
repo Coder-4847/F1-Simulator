@@ -1,3 +1,4 @@
+import {validateTrack,insertionIndex} from './track-editor.js';
 import {splitMarkup,drawSplit,updateSplitHUD,splitPause,splitResults} from './split-screen.js';
 import {damageDiagram} from './handling.js';
 import {TEAMS,TIRES,WEATHER,PRESETS,defaultState,makeTrack,formatTime,scoreSeason,clamp} from './core.js';
@@ -47,15 +48,28 @@ function drawEditor(){const canvas=document.querySelector('#editor');if(!canvas)
   editor.points.forEach((p,i)=>{const x=p[0]*w,y=p[1]*h;ctx.beginPath();ctx.arc(x,y,7,0,7);ctx.fillStyle=i===0?'#d8ff36':'#182011';ctx.fill();ctx.strokeStyle='#d8ff36';ctx.lineWidth=1.5;ctx.stroke();ctx.font='9px Arial';ctx.fillStyle='#d8e5c4';ctx.fillText(String(i+1).padStart(2,'0'),x+11,y-9);});
   document.querySelector('#editor-stats').textContent=`${(t.length/1000).toFixed(2)} KM · ${editor.points.length} CONTROL POINTS · ${editor.width} M WIDE`;
 }
-function bindEditor(){drawEditor();const canvas=document.querySelector('#editor');const xy=e=>{const r=canvas.getBoundingClientRect();return [clamp((e.clientX-r.left)/r.width,.035,.965),clamp((e.clientY-r.top)/r.height,.045,.955)];};
-  canvas.onpointerdown=e=>{const p=xy(e);let idx=editor.points.findIndex(q=>Math.hypot((q[0]-p[0])*canvas.clientWidth,(q[1]-p[1])*canvas.clientHeight)<17);history.push(structuredClone(editor.points));if(history.length>40)history.shift();
-    if(editorMode==='remove'){if(idx>=0&&editor.points.length>4)editor.points.splice(idx,1);else toast('A circuit needs at least four nodes.');}
-    else if(editorMode==='add'){if(editor.points.length>=60){toast('Maximum 60 control points.');return;}let closest=Infinity,insert=0;editor.points.forEach((q,i)=>{const b=editor.points[(i+1)%editor.points.length],dx=b[0]-q[0],dy=b[1]-q[1],u=clamp(((p[0]-q[0])*dx+(p[1]-q[1])*dy)/(dx*dx+dy*dy||1),0,1);const d=Math.hypot(p[0]-q[0]-u*dx,p[1]-q[1]-u*dy);if(d<closest){closest=d;insert=i+1;}});editor.points.splice(insert,0,p);}
-    else if(idx>=0){drag=idx;canvas.setPointerCapture(e.pointerId);}drawEditor();};
-  canvas.onpointermove=e=>{if(drag>=0){editor.points[drag]=xy(e);drawEditor();}};canvas.onpointerup=canvas.onpointercancel=()=>{drag=-1;};
+function bindEditor(){drag=-1;drawEditor();const canvas=document.querySelector('#editor');const xy=e=>{const r=canvas.getBoundingClientRect();return [clamp((e.clientX-r.left)/r.width,.035,.965),clamp((e.clientY-r.top)/r.height,.045,.955)];};
+  const remember=()=>{history.push(structuredClone(editor.points));if(history.length>40)history.shift();};
+  canvas.onpointerdown=e=>{
+    if(e.button!==0)return;
+    const p=xy(e),idx=editor.points.findIndex(q=>Math.hypot((q[0]-p[0])*canvas.clientWidth,(q[1]-p[1])*canvas.clientHeight)<17);
+    if(editorMode==='remove'){
+      if(idx<0)return;if(editor.points.length<=4){toast('A circuit needs at least four nodes.');return;}
+      remember();editor.points.splice(idx,1);
+    }else if(editorMode==='add'){
+      if(editor.points.length>=60){toast('Maximum 60 control points.');return;}
+      if(idx>=0){toast('Choose a new position away from an existing node.');return;}
+      remember();editor.points.splice(insertionIndex(editor.points,editor.width,p),0,p);
+    }else if(idx>=0){remember();drag=idx;canvas.setPointerCapture(e.pointerId);}
+    drawEditor();
+  };
+  canvas.onpointermove=e=>{if(drag>=0){editor.points[drag]=xy(e);drawEditor();}};
+  canvas.onpointerup=()=>{if(drag>=0&&JSON.stringify(history.at(-1))===JSON.stringify(editor.points))history.pop();drag=-1;};
+  canvas.onpointercancel=()=>{if(drag>=0){editor.points=history.pop();drag=-1;drawEditor();}};
+  canvas.onlostpointercapture=()=>{drag=-1;};
   document.querySelector('#track-name').oninput=e=>editor.name=e.target.value;
 }
-function saveTrack(){if(!editor.name.trim()){toast('Give your circuit a name.');return false;}const t=makeTrack(editor.points,editor.width);if(t.length<500){toast('Make your circuit at least 500 meters long.');return false;}
+function saveTrack(){if(!editor.name.trim()){toast('Give your circuit a name.');return false;}const error=validateTrack(editor.points,editor.width);if(error){toast(error);return false;}
   const old=state.tracks.find(t=>t.id===editor.id);if(old&&(old.width!==editor.width||JSON.stringify(old.points)!==JSON.stringify(editor.points)))delete state.records[editor.id];
   if(old)Object.assign(old,structuredClone(editor));else state.tracks.push(structuredClone(editor));state.selectedTrack=editor.id;save();toast('Circuit saved. See you on the grid.');return true;}
 

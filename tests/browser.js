@@ -33,7 +33,19 @@ document.querySelector('#run').onclick=async()=>{
     canvas.dispatchEvent(new frame.contentWindow.PointerEvent('pointerdown',{clientX:rect.left+rect.width*.32,clientY:rect.top+rect.height*.19,bubbles:true}));
     assert(doc().querySelector('#editor-stats').textContent!==before,'Track builder inserts a node');
     click('[data-action="undo-track"]');assert(doc().querySelector('#editor-stats').textContent===before,'Track builder undo restores geometry');
-    set('#editor-width',18,'input');click('[data-action="save-track"]');
+    click('[data-editor-mode="move"]');
+    // Switching tools rebuilds the canvas: use fresh references for each gesture.
+    const gesture=(from,to,cancel=false)=>{const c=doc().querySelector('#editor'),r=c.getBoundingClientRect();const old=c.setPointerCapture;c.setPointerCapture=()=>{};for(const [type,p]of [['pointerdown',from],['pointermove',to],[cancel?'pointercancel':'pointerup',to]])c.dispatchEvent(new frame.contentWindow.PointerEvent(type,{pointerId:1,button:0,clientX:r.left+r.width*p[0],clientY:r.top+r.height*p[1],bubbles:true}));c.setPointerCapture=old;};
+    gesture([.15,.7],[.2,.72]);click('[data-action="save-track"]');
+    assert(Math.abs(saved().tracks.at(-1).points[0][0]-.2)<.001,'Dragging a track node persists its new position');
+    click('[data-action="undo-track"]');click('[data-action="save-track"]');assert(Math.abs(saved().tracks.at(-1).points[0][0]-.15)<.001,'Undo restores dragged geometry');
+    gesture([.15,.7],[.22,.76],true);click('[data-action="save-track"]');assert(Math.abs(saved().tracks.at(-1).points[0][0]-.15)<.001,'Canceled drag leaves saved geometry unchanged');
+    click('[data-editor-mode="remove"]');gesture([.15,.7],[.15,.7]);click('[data-action="save-track"]');assert(saved().tracks.at(-1).points.length===8,'Removing a node persists');
+    click('[data-action="undo-track"]');click('[data-action="save-track"]');assert(saved().tracks.at(-1).points.length===9,'Undo restores removed node');
+    click('[data-editor-mode="move"]');gesture([.15,.7],[.2,.24]);click('[data-action="save-track"]');
+    assert(doc().querySelector('#toast').textContent.includes('apart')&&Math.abs(saved().tracks.at(-1).points[0][0]-.15)<.001,'Invalid duplicate nodes cannot overwrite a saved circuit');
+    click('[data-action="undo-track"]');set('#editor-width',18,'input');click('[data-action="save-track"]');
+
     assert(saved().tracks.at(-1).name==='Regression Circuit'&&saved().tracks.at(-1).width===18,'Custom circuit and width persist');
     click('[data-action="test-track"]');assert(doc().querySelector('#race-track').value===saved().selectedTrack,'Save and test selects the custom circuit');
     click('[data-action="start-race"]');await sleep(300);assert(doc().querySelector('#race-canvas').dataset.drawError==='0','Custom circuit renders with no WebGL error');
@@ -97,8 +109,9 @@ document.querySelector('#run').onclick=async()=>{
     assert([0,1].every(id=>doc().querySelector(`#split-canvas-${id}`).dataset.drawError==='0'),'Both player cameras render without WebGL errors');
     const panes=()=>[...doc().querySelectorAll('.split-pane')].map(el=>el.getBoundingClientRect());
     let bounds=panes();assert(bounds[1].left>bounds[0].left&&Math.abs(bounds[1].top-bounds[0].top)<2,'Side-by-side layout places players left and right');
-    press('keydown','ArrowUp');await sleep(4000);press('keyup','ArrowUp');
-    assert(Number(doc().querySelector('#split-speed-1').textContent)>0&&Number(doc().querySelector('#split-speed-0').textContent)===0,'Arrow throttle moves P2 without moving P1');
+    // Sample soon after lights-out, before AI traffic can push the stationary P1.
+    press('keydown','ArrowUp');await sleep(3100);press('keyup','ArrowUp');
+    assert(Number(doc().querySelector('#split-speed-1').textContent)>0&&Number(doc().querySelector('#split-speed-0').textContent)===0,'Arrow throttle moves P2 without moving P1 (speeds '+[0,1].map(id=>doc().querySelector('#split-speed-'+id).textContent).join(',')+')');
     press('keydown','w');press('keydown','ArrowUp');await sleep(500);press('keyup','w');press('keyup','ArrowUp');
     assert([0,1].every(id=>Number(doc().querySelector(`#split-speed-${id}`).textContent)>0),'Both players drive simultaneously');
     press('keydown','p');press('keyup','p');await sleep(150);

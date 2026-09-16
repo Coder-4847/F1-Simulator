@@ -1,3 +1,4 @@
+import {resolveCarContacts,aiPitNeed,aiServiceTire} from './traffic.js';
 import {TEAMS,atTrack,angleDiff,clamp,mod} from './core.js';
 import {handlingGrip,steeringRate} from './handling.js';
 import {SURFACES,surfaceAt,moveWithinBarriers,resetWorld} from './world.js';
@@ -45,12 +46,15 @@ export function stepRace(r,keys,dt,onLap=()=>{}){
     if(driver){const steerInput=(input.has('ArrowRight')||input.has('d')?1:0)-(input.has('ArrowLeft')||input.has('a')?1:0);driver.steer+=(steerInput-driver.steer)*(1-Math.exp(-dt*7));}
     const setup=c.setup;
     const lap=Math.max(1,Math.floor(c.distance/r.track.length)+1),progress=mod(c.distance,r.track.length);
+    if(!driver&&r.mode==='race')c.aiPitRequested ||= aiPitNeed(r,c);
     const plan=r.pitPlan.find(s=>s.lap===lap&&!c.pitted.includes(s.lap));
-    if(c.speed>=0&&c.lastPitLap!==lap&&progress<75&&c.distance>r.track.length*.8&&(plan||(driver&&driver.pitRequested))&&!c.pitTime){
-      c.pitTime=5.2;c.lastPitLap=lap;c.pitted.push(lap);c.speed=0;c.offset=-r.track.width/2-3;resetWorld(r.track,c);c.nextTire=driver&&driver.pitRequested?driver.pitTire:plan?.tire||r.config.pitTire;
+    if(c.speed>=0&&c.lastPitLap!==lap&&progress<75&&c.distance>r.track.length*.8&&(plan||(driver&&driver.pitRequested)||c.aiPitRequested)&&!c.pitTime){
+      const adaptive=!driver&&Boolean(c.aiPitRequested);
+      c.pitTime=5.2+(!driver?Math.max(c.suspension,c.engine)*.04:0);c.lastPitLap=lap;c.pitted.push(lap);c.speed=0;c.offset=-r.track.width/2-3;resetWorld(r.track,c);c.nextTire=driver&&driver.pitRequested?driver.pitTire:adaptive?aiServiceTire(r,c):plan?.tire||r.config.pitTire;
+      c.aiPitRequested='';
       if(driver){driver.pitRequested=false;playerMessage(r,c.id,'Pit stop · tires, repairs & fuel',5);}
     }
-    if(c.pitTime>0){c.pitTime-=dt;if(c.pitTime<=0){c.pitTime=0;c.tire=c.nextTire;c.wear=0;c.damage*=.3;c.wing=0;c.rearWing=0;c.suspension*=.5;c.engine*=.7;c.fuel=driver?driver.pitFuel:r.config.fuel;c.offset=-2;resetWorld(r.track,c); if(driver)playerMessage(r,c.id,'Go, go, go!');}continue;}
+    if(c.pitTime>0){c.pitTime-=dt;if(c.pitTime<=0){c.pitTime=0;c.tire=c.nextTire;c.wear=0;c.damage*=.3;c.wing=0;c.rearWing=0;c.suspension*=driver?.5:.15;c.engine*=driver?.7:.25;c.fuel=driver?driver.pitFuel:clamp(Math.max(r.config.fuel,Math.min(r.track.length*r.config.laps-c.distance,r.track.length*3)*.0021+2),5,100);c.offset=-2;resetWorld(r.track,c); if(driver)playerMessage(r,c.id,'Go, go, go!');}continue;}
     if(!c.world)resetWorld(r.track,c);
     const pos=atTrack(r.track,c.distance),ahead=atTrack(r.track,c.distance+45);
     const curvature=Math.abs(angleDiff(ahead.yaw,pos.yaw));
@@ -73,8 +77,17 @@ export function stepRace(r,keys,dt,onLap=()=>{}){
       const target=Math.min(setup.topSpeed/3.6,cornerSpeed)*( .50+r.config.difficulty*.0046+(c.id%3)*.014);
       throttle=c.speed<target?1:.13;brake=c.speed>target+3?.7:0;
       let targetOffset=(c.id%2?1:-1)*2.3+Math.sin(r.elapsed*.45+c.id)*.65;
-      const front=r.cars.find(o=>o!==c&&o.distance>c.distance&&o.distance-c.distance<18&&Math.abs(o.offset-c.offset)<1.9);
-      if(front)targetOffset=front.offset>0?-3.5:3.5;
+      const front=r.cars.filter(o=>o!==c&&!o.finished&&!o.retired&&o.pitTime<=0&&o.distance>c.distance&&o.distance-c.distance<28&&Math.abs(o.offset-c.offset)<2.4).sort((a,b)=>a.distance-b.distance)[0];
+      if(front){
+        if(!c.passUntil||r.elapsed>c.passUntil){
+          const desired=front.offset>0?-3.5:3.5;
+          const occupied=r.cars.some(o=>o!==c&&o!==front&&Math.abs(o.distance-c.distance)<15&&Math.abs(o.offset-desired)<2.5);
+          c.passOffset=occupied?c.offset:desired;c.passUntil=r.elapsed+2;
+        }
+        targetOffset=c.passOffset;
+        const gap=front.distance-c.distance;
+        if(Math.abs(front.offset-c.offset)<2.2&&gap<8+Math.max(0,c.speed-front.speed)*.7){throttle=0;brake=Math.max(brake,clamp((c.speed-front.speed)*.12+(8-gap)*.1,0,1));}
+      }else if(r.elapsed<(c.passUntil||0))targetOffset=c.passOffset;
       c.targetOffset=targetOffset;
     }
     const top=(setup.topSpeed/3.6)*(1-(setup.downforce-50)*.0018)*(1-c.engine*.006)*(1-c.damage*.0015);
@@ -92,9 +105,12 @@ export function stepRace(r,keys,dt,onLap=()=>{}){
     if(!c.world)resetWorld(r.track,c);
     let dx,dz,nextDistance,nextOffset;
     if(driver){dx=Math.sin(c.travelHeading??c.heading)*c.speed*dt;dz=Math.cos(c.travelHeading??c.heading)*c.speed*dt;}
-    else {nextDistance=c.distance+c.speed*dt;nextOffset=c.offset+(c.targetOffset-c.offset)*dt*1.6;const next=atTrack(r.track,nextDistance,nextOffset);dx=next.x-c.world.x;dz=next.z-c.world.z;c.heading=next.yaw;}
+    else {nextDistance=c.distance+c.speed*dt;nextOffset=c.offset+clamp((c.targetOffset-c.offset)*1.6,-2.5,2.5)*dt;const next=atTrack(r.track,nextDistance,nextOffset);dx=next.x-c.world.x;dz=next.z-c.world.z;c.heading=next.yaw;}
+    const contactDrift=Math.hypot(c.contactVX||0,c.contactVZ||0);
+    dx+=(c.contactVX||0)*dt;dz+=(c.contactVZ||0)*dt;
+    c.contactVX=(c.contactVX||0)*Math.exp(-dt*5);c.contactVZ=(c.contactVZ||0)*Math.exp(-dt*5);
     const collision=moveWithinBarriers(r.track,c,dx,dz,c.heading);
-    if(!driver&&!collision.hit){c.distance=nextDistance;c.offset=nextOffset;}
+    if(!driver&&!collision.hit&&contactDrift<.001){c.distance=nextDistance;c.offset=nextOffset;}
     if(collision.hit){
       const normalSpeed=Math.abs((dx*collision.nx+dz*collision.nz)/Math.max(dt,.001));
       c.speed*=Math.max(.05,1-normalSpeed/Math.max(Math.abs(c.speed),1));
@@ -105,11 +121,7 @@ export function stepRace(r,keys,dt,onLap=()=>{}){
     if(c.fuel<=0&&driver){playerMessage(r,c.id,'Out of fuel · '+(c.id===0?'R':'Backspace')+' to recover',1);}
     if(!driver&&r.mode==='race'&&c.distance>=r.track.length*r.config.laps){c.finished=true;c.finishTime=r.elapsed;r.finishOrder.push(c.id);}
   }
-  if(r.mode==='race')for(let i=0;i<r.cars.length;i++)for(let j=i+1;j<r.cars.length;j++){
-    const a=r.cars[i],b=r.cars[j];if(a.pitTime>0||b.pitTime>0||a.finished||b.finished)continue;
-    const gap=Math.abs(mod(a.distance-b.distance+r.track.length/2,r.track.length)-r.track.length/2);
-    if(gap<4.1&&Math.abs(a.offset-b.offset)<1.7&&a.collisionCooldown===0&&b.collisionCooldown===0){const strength=3+Math.abs(a.speed-b.speed)*.45;const ax=(a.world?.x||0)-(b.world?.x||0),az=(a.world?.z||0)-(b.world?.z||0),length=Math.hypot(ax,az)||1;impact(r,a,strength,ax/length,az/length);impact(r,b,strength,-ax/length,-az/length);a.speed*=.8;b.speed*=.87;const side=a.offset>b.offset?1:-1;const yaw=atTrack(r.track,a.distance).yaw;moveWithinBarriers(r.track,a,Math.cos(yaw)*side*.55,-Math.sin(yaw)*side*.55,a.heading);moveWithinBarriers(r.track,b,-Math.cos(yaw)*side*.55,Math.sin(yaw)*side*.55,b.heading);a.collisionCooldown=b.collisionCooldown=1.4;}
-  }
+  if(r.mode==='race')resolveCarContacts(r,dt,impact);
   for(const id of r.splitScreen?[0,1]:[0]){
     const p=r.cars[id],driver=playerState(r,id),clock=r.elapsed+(driver.penalty||0);
     if(p.finished||p.retired)continue;
@@ -140,7 +152,7 @@ export function impact(r,c,strength,nx=0,nz=0){
 export function standings(r){return [...r.cars].sort((a,b)=>Boolean(a.retired||(r.dnf&&a.id===0))-Boolean(b.retired||(r.dnf&&b.id===0))||(a.finished&&b.finished?a.finishTime-b.finishTime:a.finished?-1:b.finished?1:b.distance-a.distance));}
 export function recover(r,id=0){
   const p=r.cars[id],driver=playerState(r,id);if(!driver||p.finished||p.retired||r.finished||r.paused)return;
-  p.offset=0;resetWorld(r.track,p);driver.invalidLap=true;p.speed=0;p.yawSlip=0;driver.steer=0;p.pitTime=0;driver.pitRequested=false;
+  p.offset=0;resetWorld(r.track,p);driver.invalidLap=true;p.speed=0;p.contactVX=0;p.contactVZ=0;p.yawSlip=0;driver.steer=0;p.pitTime=0;driver.pitRequested=false;
   const lap=Math.max(1,Math.floor(p.distance/r.track.length)+1);
   if(r.pitPlan.some(stop=>stop.lap===lap)&&!p.pitted.includes(lap))p.pitted.push(lap);
   p.tire=driver.pitTire;p.wear=0;p.wing=0;p.rearWing=0;p.damage*=.3;p.suspension*=.5;p.engine*=.7;p.fuel=driver.pitFuel;

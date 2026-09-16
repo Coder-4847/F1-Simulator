@@ -1,3 +1,4 @@
+import {sceneryLayout} from './scenery.js';
 import {atTrack,angleDiff} from './core.js';
 import {linePoint,guideSpeed} from './racing-line.js';
 import {RUNOFF,edgePoint,barrierSegments,ghostPose} from './world.js';
@@ -40,40 +41,29 @@ export function buildWorld(track){
     for(const side of [-1,1]){
       strip(p,q,side*half,side*(half+RUNOFF.curb),.025,i%4<2?'#efeee4':'#e34438');
       strip(p,q,side*(half-.16),side*half,.018,'#f6f2dc');
-      if(i%4===0){
-        for(let layer=0;layer<3;layer++){
-          const t=edgePoint(p,side*(half+14+layer*14+(i*13%9)));
-          m.box(t[0],0,t[2],.55,2.8,.55,'#765034');
-          const colors=['#2f713b','#469047','#609b39','#347f57'];
-          m.cone(t[0],t[2],1.7,2.6+layer*.5,4+(i%3),colors[(i+layer)%4]);
-          m.cone(t[0],t[2],3.8,1.9+layer*.3,3,colors[(i+layer+1)%4]);
-        }
-      }
-      if(i%12===0){
-        const t=edgePoint(p,side*(half+8.5));
-        m.box(t[0],0,t[2],.12,3.5,.12,'#788b91');
-        const flag=edgePoint(p,side*(half+10));
-        m.box(flag[0],0,flag[2],.12,6,.12,'#d3dce0');
-        m.face([[flag[0],6,flag[2]],[flag[0]+2,5.6,flag[2]+.3],[flag[0]+2,4.7,flag[2]+.3],[flag[0],5,flag[2]]],['#d8ff36','#ef6350','#61c8fa','#bc9aff'][i/12%4|0]);
-      }
     }
-    if(i%48===12){
-      const side=i%96===12?1:-1;
-      const place=(lat,fwd,y)=>[p.x+Math.cos(p.yaw)*lat+Math.sin(p.yaw)*fwd,y,p.z-Math.sin(p.yaw)*lat+Math.cos(p.yaw)*fwd];
+  });
+  for(const obj of sceneryLayout(track)){
+    const {x,z,index:i,layer,side}=obj,p=a[i];
+    if(obj.kind==='tree'){
+      const colors=['#2f713b','#469047','#609b39','#347f57'];
+      m.box(x,0,z,.55,2.8,.55,'#765034');m.cone(x,z,1.7,2.6+layer*.5,4+(i%3),colors[(i+layer)%4]);m.cone(x,z,3.8,1.9+layer*.3,3,colors[(i+layer+1)%4]);
+    }else if(obj.kind==='post')m.box(x,0,z,.12,3.5,.12,'#788b91');
+    else if(obj.kind==='flag'){
+      m.box(x,0,z,.12,6,.12,'#d3dce0');m.face([[x,6,z],[x+2,5.6,z+.3],[x+2,4.7,z+.3],[x,5,z]],['#d8ff36','#ef6350','#61c8fa','#bc9aff'][i/12%4|0]);
+    }else if(obj.kind==='tent'){
+      m.box(x,0,z,10,3,7,'#e8e4ce');m.cone(x,z,3,8,3,'#ee7150');m.box(x,1,z-3.55,7,1.4,.08,'#3f778a');
+    }else if(obj.kind==='stand'){
+      const place=(lat,fwd,y)=>[x+Math.cos(p.yaw)*lat+Math.sin(p.yaw)*fwd,y,z-Math.sin(p.yaw)*lat+Math.cos(p.yaw)*fwd];
       for(let row=0;row<6;row++){
-        const lat=side*(half+14+row*1.3),height=.8+row*.7;
+        const lat=side*(-4+row*1.3),height=.8+row*.7;
         m.face([place(lat,-13,height),place(lat,13,height),place(lat+side*1.3,13,height),place(lat+side*1.3,-13,height)],row%2?'#388bba':'#eed25d');
         for(let seat=0;seat<22;seat++){const t=place(lat,seat*1.15-12,height);m.box(t[0],t[1],t[2],.45,.6,.45,['#ed6751','#eadfc0','#384d91','#8dcdeb'][(seat+row)%4]);}
       }
-      m.face([place(side*(half+13),-14,6.5),place(side*(half+23),-14,7.5),place(side*(half+23),14,7.5),place(side*(half+13),14,6.5)],'#e5e5d5');
-      for(const f of [-13,13]){const t=place(side*(half+22),f,0);m.box(t[0],0,t[2],.3,7.5,.3,'#536b76');}
+      m.face([place(-5,-14,6.5),place(5,-14,7.5),place(5,14,7.5),place(-5,14,6.5)],'#e5e5d5');
+      for(const f of [-13,13]){const t=place(side*4,f,0);m.box(t[0],0,t[2],.3,7.5,.3,'#536b76');}
     }
-    if(i%64===32){
-      const t=edgePoint(p,half+32);
-      m.box(t[0],0,t[2],10,3,7,'#e8e4ce');m.cone(t[0],t[2],3,8,3,'#ee7150');
-      m.box(t[0],1,t[2]-3.55,7,1.4,.08,'#3f778a');
-    }
-  });
+  }
   for(const wall of barrierSegments(track)){
     const {a,b,nx,nz,index}=wall,h=RUNOFF.wallHeight,w=RUNOFF.wallThickness;
     const c=index%16<8?'#f0eee3':'#e25443';

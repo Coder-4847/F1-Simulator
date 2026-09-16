@@ -1,3 +1,6 @@
+import {sceneryLayout,sceneryClear} from '../src/scenery.js';
+import {validateTrack,insertionIndex} from '../src/track-editor.js';
+import {carContact,resolveCarContacts,aiPitNeed} from '../src/traffic.js';
 import {steeringRate,cornerLimit,damageColor,damageDiagram} from '../src/handling.js';
 import {racingPath,guideSpeed} from '../src/racing-line.js';
 import test from 'node:test';
@@ -215,4 +218,57 @@ test('both split players complete a lap with independent timing and input',()=>{
     stepRace(r,keys,.02);
   }
   assert.equal(r.finished,true);assert.ok(r.cars.slice(0,2).every(c=>c.finished));assert.ok(Number.isFinite(r.best)&&Number.isFinite(r.player2.best));assert.equal(new Set(r.finishOrder).size,r.finishOrder.length);
+});
+
+test('all scenery footprints clear every section of all presets and custom widths',()=>{
+  for(const preset of defaultState().tracks)for(const width of [10,13,20]){
+    const track=makeTrack(preset.points,width),objects=sceneryLayout(track);
+    assert.ok(objects.filter(o=>o.kind==='tree').length>50);
+    for(const o of objects)assert.ok(sceneryClear(track,o.x,o.z,o.radius),`${preset.id} ${o.kind}`);
+    const p=atTrack(track,track.length*.53);assert.equal(sceneryClear(track,p.x,p.z,3),false);
+  }
+});
+test('track builder validates crossings, duplicate nodes, road clearance and presets',()=>{
+  for(const preset of defaultState().tracks)for(const width of [10,20])assert.equal(validateTrack(preset.points,width),'');
+  assert.match(validateTrack([[.1,.1],[.9,.9],[.1,.9],[.9,.1]],13),/cross/);
+  assert.match(validateTrack([[.1,.1],[.1,.1],[.9,.9],[.1,.9]],13),/apart/);
+  assert.ok(validateTrack([[.1,.1],[.9,.1],[.9,.11],[.1,.11]],20));
+  assert.ok(validateTrack([[NaN,.1],[.9,.1],[.9,.9],[.1,.9]],13));
+  assert.equal(insertionIndex([[.1,.1],[.9,.1],[.9,.9],[.1,.9]],13,[.5,.05]),1);
+});
+test('gentle aligned contact separates without arbitrary speed cuts or damage',()=>{
+  const r=fixture();r.cars=r.cars.slice(0,2);const [a,b]=r.cars;
+  a.distance=100;b.distance=104.5;a.offset=b.offset=0;resetWorld(r.track,a);resetWorld(r.track,b);a.heading=b.heading=a.travelHeading=b.travelHeading=0;
+  a.world={x:0,z:0};b.world={x:0,z:4.5};a.speed=b.speed=30;let impacts=0;
+  assert.ok(carContact(r.track,a,b));resolveCarContacts(r,.008,()=>impacts++);
+  assert.equal(a.speed,30);assert.equal(b.speed,30);assert.equal(impacts,0);
+});
+test('rear contact transfers closing speed along the contact normal without sideways kicks',()=>{
+  const r=fixture();r.cars=r.cars.slice(0,2);const [a,b]=r.cars;
+  a.distance=100;b.distance=104.5;a.offset=b.offset=0;resetWorld(r.track,a);resetWorld(r.track,b);
+  const h=a.heading;b.heading=b.travelHeading=h;const ax=a.world.x,az=a.world.z;b.world={x:ax+Math.sin(h)*4.5,z:az+Math.cos(h)*4.5};a.speed=35;b.speed=30;let impacts=0;
+  resolveCarContacts(r,.008,()=>impacts++);
+  assert.ok(a.speed>30&&a.speed<35);assert.ok(b.speed>30&&b.speed<35);assert.ok(Math.hypot(a.contactVX,a.contactVZ)<.001);assert.equal(impacts,2);
+  assert.ok(Math.hypot(a.world.x-ax,a.world.z-az)<.13);
+});
+test('contact checks use world positions instead of nearby lap progress',()=>{
+  const r=fixture(),[a,b]=r.cars;a.distance=b.distance=100;a.offset=b.offset=0;a.world={x:0,z:0};b.world={x:50,z:50};assert.equal(carContact(r.track,a,b),null);
+});
+test('AI requests need-based service, repairs effectively and does not pit again immediately',()=>{
+  const r=fixture();r.config.laps=12;r.pitPlan=[];r.cars[0].finished=true;r.cars=r.cars.slice(0,2);const c=r.cars[1];
+  c.distance=r.track.length+10;c.wear=80;c.wing=60;c.engine=70;c.suspension=80;resetWorld(r.track,c);
+  assert.equal(aiPitNeed(r,c),'repairs');stepRace(r,new Set(),.02);assert.ok(c.pitTime>0);
+  for(let i=0;i<500;i++)stepRace(r,new Set(),.02);
+  assert.equal(c.pitTime,0);assert.ok(c.wear<2&&c.engine<30&&c.suspension<40&&c.wing===0);assert.equal(c.tire,'hard');assert.deepEqual(c.pitted,[2]);assert.equal(aiPitNeed(r,c),'');
+});
+test('AI tire and fuel service responds to weather and avoids unnecessary final-sector stops',()=>{
+  const r=fixture();r.config.laps=10;r.pitPlan=[];r.weather='Heavy rain';r.cars[0].finished=true;r.cars=r.cars.slice(0,2);const c=r.cars[1];c.distance=r.track.length+10;c.wear=70;resetWorld(r.track,c);
+  assert.equal(aiPitNeed(r,c),'tires');stepRace(r,new Set(),.02);assert.equal(c.nextTire,'wet');
+  c.pitTime=0;c.wear=0;c.fuel=1;assert.equal(aiPitNeed(r,c),'fuel');c.distance=r.track.length*r.config.laps-100;c.wear=80;assert.equal(aiPitNeed(r,c),'');
+});
+
+test('AI completes a long race with unplanned tire service',()=>{
+  const r=fixture();r.config.laps=10;r.config.damage=false;r.config.fuel=100;r.pitPlan=[];r.cars=r.cars.slice(0,2);r.cars[0].finished=true;r.cars[1].fuel=100;
+  for(let i=0;i<35000&&!r.cars[1].finished;i++)stepRace(r,new Set(),.04);
+  const c=r.cars[1];assert.equal(c.finished,true);assert.ok(c.pitted.length>0);assert.equal(new Set(c.pitted).size,c.pitted.length);assert.ok(c.fuel>0);
 });
